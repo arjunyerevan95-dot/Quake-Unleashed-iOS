@@ -110,6 +110,29 @@ index d2670b6..938b013 100644
  	{
  		while (1)
  		{
+diff --git a/Quake/sys_sdl_unix.c b/Quake/sys_sdl_unix.c
+index 0319c05..c0384d7 100644
+--- a/Quake/sys_sdl_unix.c
++++ b/Quake/sys_sdl_unix.c
+@@ -514,6 +514,10 @@ qboolean Sys_GetAltUserPrefDir (qboolean remastered, char *dst, size_t dstsize)
+ 
+ static qboolean Sys_Exec (const char *cmd, ...)
+ {
++#ifdef QVR_IOS
++    (void)cmd;
++    return false; // No external process launching from the iOS sandbox.
++#else
+ 	pid_t p = fork ();
+ 	if (p < 0) // fork failed
+ 		return false;
+@@ -551,6 +555,7 @@ static qboolean Sys_Exec (const char *cmd, ...)
+ 	{
+ 		return true;
+ 	}
++#endif
+ }
+ 
+ qboolean Sys_Explore (const char *path)
 diff --git a/Quake/vr/vr_ao.cpp b/Quake/vr/vr_ao.cpp
 index 7862a1e..d8d48ee 100644
 --- a/Quake/vr/vr_ao.cpp
@@ -169,6 +192,20 @@ index 7862a1e..d8d48ee 100644
  
  // One pose: for each vertex, the share of cosine-weighted rays over its hemisphere that the model's own triangles
  // stop within `reach` (a hit counts less the farther it is: 1 - t / reach). The same bytes as testing every triangle
+diff --git a/Quake/vr/vr_blender.cpp b/Quake/vr/vr_blender.cpp
+index 82c4861..a6b7b84 100644
+--- a/Quake/vr/vr_blender.cpp
++++ b/Quake/vr/vr_blender.cpp
+@@ -264,6 +264,9 @@ struct Edit
+     CloseHandle(pi.hThread);
+     CloseHandle(pi.hProcess);
+     return true;
++#elif defined(QVR_IOS)
++    (void)cmd; (void)dir;
++    return false; // External desktop editors cannot be launched on iOS.
+ #else
+     (void)dir;
+     return system((cmd + " &").cStr()) == 0;
 diff --git a/Quake/vr/vr_findradius.cpp b/Quake/vr/vr_findradius.cpp
 index 28ef36d..3ca2c8e 100644
 --- a/Quake/vr/vr_findradius.cpp
@@ -245,4 +282,32 @@ index 56f93fd..1799021 100644
 +    built.fetchedAt = static_cast<za::I64>(time(nullptr));
      za::String status;
      if(!fetchIndex(built, url, status))
+     {
+diff --git a/Quake/vr/vr_motion_child.cpp b/Quake/vr/vr_motion_child.cpp
+index 9a9ad77..d20e6fc 100644
+--- a/Quake/vr/vr_motion_child.cpp
++++ b/Quake/vr/vr_motion_child.cpp
+@@ -148,6 +148,9 @@ bool start(const za::Vector<za::String>& args, za::String& error)
+     process = pi.hProcess;
+     exitCode = 0;
+     return true;
++#elif defined(QVR_IOS)
++    error = "External helper processes are unavailable on iOS";
++    return false;
+ #else
+     if(pid > 0)
+     {
+diff --git a/Quake/vr/vr_relight_process.cpp b/Quake/vr/vr_relight_process.cpp
+index 6324461..2ee0ddc 100644
+--- a/Quake/vr/vr_relight_process.cpp
++++ b/Quake/vr/vr_relight_process.cpp
+@@ -156,6 +156,9 @@ bool start(int slot, const za::String& exe, const za::Vector<za::String>& args,
+     process[slot] = pi.hProcess;
+     exitCode[slot] = 0;
+     return true;
++#elif defined(QVR_IOS)
++    error = "External helper processes are unavailable on iOS";
++    return false;
+ #else
+     if(pid[slot] > 0)
      {
