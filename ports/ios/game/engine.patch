@@ -110,3 +110,26 @@ index d2670b6..938b013 100644
  	{
  		while (1)
  		{
+diff --git a/Quake/vr/vr_mapindex.cpp b/Quake/vr/vr_mapindex.cpp
+index 56f93fd..1799021 100644
+--- a/Quake/vr/vr_mapindex.cpp
++++ b/Quake/vr/vr_mapindex.cpp
+@@ -516,8 +516,7 @@ bool loadCache(Index& idx, const za::String& url, bool anyAge)
+         return false;
+     }
+     fetchedAt = static_cast<za::I64>(strtoll(header[2].cStr() + 1, nullptr, 10));
+-    za::I64 now = 0;
+-    time(&now);
++    const za::I64 now = static_cast<za::I64>(time(nullptr));
+     if(!anyAge && (fetchedAt <= 0 || now - fetchedAt > cacheSeconds))
+     {
+         note("map index: the cached copy is %lld s old (over %lld): fetched again", static_cast<long long>(now - fetchedAt),
+@@ -727,7 +726,7 @@ void run() noexcept
+     }
+ 
+     built.source = url;
+-    time(&built.fetchedAt);
++    built.fetchedAt = static_cast<za::I64>(time(nullptr));
+     za::String status;
+     if(!fetchIndex(built, url, status))
+     {
