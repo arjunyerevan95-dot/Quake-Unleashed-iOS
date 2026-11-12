@@ -1,0 +1,26 @@
+name: Standalone iOS renderer diagnostic
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ios-renderer-probe
+  cancel-in-progress: false
+jobs:
+  probe:
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch pinned native dependency donor (no game assets)
+        run: |
+          curl --fail --location --retry 2 --max-time 180 https://github.com/thebcd69/bcd-games/releases/download/v0.1.653/BCD.ipa -o "$RUNNER_TEMP/native-donor.ipa"
+          python3 ports/ios/probe/extract_inputs.py "$RUNNER_TEMP/native-donor.ipa" "$RUNNER_TEMP/native-inputs"
+      - name: Compile and package minimal native diagnostic
+        run: bash ports/ios/probe/build_probe.sh "$RUNNER_TEMP/native-inputs" "$RUNNER_TEMP/probe-output"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: UnleashedRendererProbe-unsigned
+          path: ${{ runner.temp }}/probe-output/UnleashedRendererProbe-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 7
