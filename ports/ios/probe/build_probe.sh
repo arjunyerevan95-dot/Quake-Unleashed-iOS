@@ -41,7 +41,7 @@ sdk=$(xcrun --sdk iphoneos --show-sdk-path)
 for src in probe osmesa_host; do
  xcrun --sdk iphoneos clang -arch arm64 -isysroot "$sdk" -miphoneos-version-min=17.0 -std=c17 -O2 -Wall -Wextra -Werror -c "$here/$src.c" -o "$out/$src.o"
 done
-xcrun --sdk iphoneos clang -arch arm64 -isysroot "$sdk" -miphoneos-version-min=17.0 -fobjc-arc -O2 "$here/App.m" "$out/probe.o" "$out/osmesa_host.o" -framework UIKit -framework Foundation -Wl,-rpath,@executable_path/Frameworks -o "$app/UnleashedRendererProbe"
+xcrun --sdk iphoneos clang -arch arm64 -isysroot "$sdk" -miphoneos-version-min=17.0 -fobjc-arc -O2 "$here/App.m" "$out/probe.o" "$out/osmesa_host.o" -framework UIKit -framework Foundation -framework CoreGraphics -Wl,-rpath,@executable_path/Frameworks -o "$app/UnleashedRendererProbe"
 python3 - "$app/Info.plist" <<'PY'
 import plistlib,sys
 with open(sys.argv[1],'wb') as f: plistlib.dump(dict(CFBundleIdentifier='am.arjunkl.unleashed.rendererprobe',CFBundleExecutable='UnleashedRendererProbe',CFBundleName='UNLEASHED Renderer Probe',CFBundlePackageType='APPL',CFBundleShortVersionString='0.0.1',CFBundleVersion='1',MinimumOSVersion='17.0',UIDeviceFamily=[1,2],LSRequiresIPhoneOS=True,UILaunchScreen={},UIFileSharingEnabled=True,LSSupportsOpeningDocumentsInPlace=True,UISupportedInterfaceOrientations=['UIInterfaceOrientationLandscapeLeft','UIInterfaceOrientationLandscapeRight']),f)
