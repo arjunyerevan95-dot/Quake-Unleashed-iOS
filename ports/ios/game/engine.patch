@@ -110,6 +110,119 @@ index d2670b6..938b013 100644
  	{
  		while (1)
  		{
+diff --git a/Quake/vr/vr_ao.cpp b/Quake/vr/vr_ao.cpp
+index 7862a1e..d8d48ee 100644
+--- a/Quake/vr/vr_ao.cpp
++++ b/Quake/vr/vr_ao.cpp
+@@ -53,7 +53,9 @@
+ #include "SDL.h"
+ #endif
+ 
++#if defined(__x86_64__) || defined(_M_X64) || defined(__i386__)
+ #include <immintrin.h> // (the bake's rays: SSE2, x64's baseline, four at a time; AVX, when there, eight)
++#endif
+ #include <stdio.h>
+ #include <string.h>
+ #include "vr_tracy.h"
+@@ -1121,6 +1123,7 @@ struct RayInput
+     float* best;
+ };
+ 
++#if defined(__x86_64__) || defined(_M_X64) || defined(__i386__)
+ void raysSse(const RayInput& in)
+ {
+     const PoseScratch& s = *in.s;
+@@ -1204,6 +1207,36 @@ QVR_TARGET_AVX void raysAvx(const RayInput& in)
+ 
+ // Whether raysAvx may run (the processor and the system: SDL's check). Made before main, read by the bake's threads.
+ const bool cpuHasAvx = SDL_HasAVX() == SDL_TRUE;
++#else
++// ARM correctness path: identical candidate ray test without x86 intrinsics.
++const bool cpuHasAvx = false;
++void raysSse(const RayInput& in)
++{
++    const PoseScratch& s = *in.s;
++    for(int r = 0; r < RAYS; ++r)
++    {
++        float best = in.reach;
++        for(int c = 0; c < in.nc; ++c)
++        {
++            const float px = in.dy[r]*s.e2z[c]-s.e2y[c]*in.dz[r];
++            const float py = in.dz[r]*s.e2x[c]-s.e2z[c]*in.dx[r];
++            const float pz = in.dx[r]*s.e2y[c]-s.e2x[c]*in.dy[r];
++            const float det = (s.e1x[c]*px+s.e1y[c]*py)+s.e1z[c]*pz;
++            if(fabsf(det) < 1e-9f) continue;
++            const float inv = 1.f/det;
++            const float u = ((s.sx[c]*px+s.sy[c]*py)+s.sz[c]*pz)*inv;
++            if(u < 0.f || u > 1.f) continue;
++            const float v = ((in.dx[r]*s.qx[c]+in.dy[r]*s.qy[c])+in.dz[r]*s.qz[c])*inv;
++            if(v < 0.f || u+v > 1.f) continue;
++            const float distance = s.e2q[c]*inv;
++            if(distance > in.tmin && distance < best) best = distance;
++        }
++        in.best[r] = best;
++    }
++}
++void raysAvx(const RayInput& in) { raysSse(in); }
++#endif
++
+ 
+ // One pose: for each vertex, the share of cosine-weighted rays over its hemisphere that the model's own triangles
+ // stop within `reach` (a hit counts less the farther it is: 1 - t / reach). The same bytes as testing every triangle
+diff --git a/Quake/vr/vr_findradius.cpp b/Quake/vr/vr_findradius.cpp
+index 28ef36d..3ca2c8e 100644
+--- a/Quake/vr/vr_findradius.cpp
++++ b/Quake/vr/vr_findradius.cpp
+@@ -31,11 +31,8 @@
+ #include <stddef.h>
+ #include <string.h>
+ 
+-#if defined(_MSC_VER)
+-#include <intrin.h>
+-#else
+-#include <x86intrin.h>
+-#endif
++// Profiling uses a portable monotonic counter; conversion below measures its rate.
++#include "SDL_timer.h"
+ 
+ using namespace qvr;
+ 
+@@ -272,7 +269,7 @@ void gridSearch(Tracking& t, const float* org, float rad, za::Vector<edict_t*>&
+ void stats_f()
+ {
+     const double seconds = Sys_DoubleTime() - stats.seconds0;
+-    const unsigned long long cycles = __rdtsc() - stats.cycles0;
++    const unsigned long long cycles = SDL_GetPerformanceCounter() - stats.cycles0;
+     const double nsPerCycle = stats.cycles0 && cycles ? seconds * 1e9 / static_cast<double>(cycles) : 0.;
+     const double frames = stats.frames > 0 ? static_cast<double>(stats.frames) : 1.;
+     const double calls = stats.calls > 0 ? static_cast<double>(stats.calls) : 1.;
+@@ -285,7 +282,7 @@ void stats_f()
+         static_cast<double>(stats.listed) / grids, static_cast<double>(stats.candidates) / grids,
+         static_cast<double>(stats.hits) / calls, sv.qcvm.edicts ? sv.qcvm.num_edicts : 0);
+     stats = Stats{};
+-    stats.cycles0 = __rdtsc();
++    stats.cycles0 = SDL_GetPerformanceCounter();
+     stats.seconds0 = Sys_DoubleTime();
+ }
+ 
+@@ -294,7 +291,7 @@ void stats_f()
+ extern "C" edict_t* VR_FindRadius(const float* org, float rad)
+ {
+     rad *= rad;
+-    const unsigned long long start = __rdtsc();
++    const unsigned long long start = SDL_GetPerformanceCounter();
+     if(!stats.cycles0)
+     {
+         stats.cycles0 = start;
+@@ -331,7 +328,7 @@ extern "C" edict_t* VR_FindRadius(const float* org, float rad)
+         chain = ent;
+     }
+     stats.hits += static_cast<long long>(found.size());
+-    stats.cycles += __rdtsc() - start;
++    stats.cycles += SDL_GetPerformanceCounter() - start;
+     return chain;
+ }
+ 
 diff --git a/Quake/vr/vr_mapindex.cpp b/Quake/vr/vr_mapindex.cpp
 index 56f93fd..1799021 100644
 --- a/Quake/vr/vr_mapindex.cpp
