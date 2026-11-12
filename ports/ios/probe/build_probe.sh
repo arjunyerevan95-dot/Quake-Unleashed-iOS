@@ -40,20 +40,25 @@ cp "$deps/"*.txt "$deps/"*.rst "$app/licenses/"
 sdk=$(xcrun --sdk iphoneos --show-sdk-path)
 probe_source="$here/probe.c"
 extra_flags=()
+extra_objects=()
 if [ "${QVR_SHADER_GATE:-0}" = 1 ]; then
  probe_source="$here/../shader_gate/compile_stages.c"
  extra_flags=(-DQVR_SHADER_GATE=1)
  [ -d "$QVR_SHADER_CORPUS" ] || { echo "Missing shader corpus" >&2; exit 2; }
  cp -R "$QVR_SHADER_CORPUS" "$app/shader-corpus"
 fi
+if [ "${QVR_SHADER_GATE:-0}" = 1 ]; then
+ xcrun --sdk iphoneos clang -arch arm64 -isysroot "$sdk" -miphoneos-version-min=17.0 -std=c17 -O2 -Wall -Wextra -Werror -c "$here/../shader_gate/draw_gui.c" -o "$out/draw_gui.o"
+ extra_objects=("$out/draw_gui.o")
+fi
 for src in probe osmesa_host; do
  input="$here/$src.c"; [ "$src" != probe ] || input="$probe_source"
  xcrun --sdk iphoneos clang -arch arm64 -isysroot "$sdk" -miphoneos-version-min=17.0 -std=c17 -O2 -Wall -Wextra -Werror -c "$input" -o "$out/$src.o"
 done
-xcrun --sdk iphoneos clang -arch arm64 -isysroot "$sdk" -miphoneos-version-min=17.0 -fobjc-arc -O2 "${extra_flags[@]}" "$here/App.m" "$out/probe.o" "$out/osmesa_host.o" -framework UIKit -framework Foundation -framework CoreGraphics -Wl,-rpath,@executable_path/Frameworks -o "$app/UnleashedRendererProbe"
+xcrun --sdk iphoneos clang -arch arm64 -isysroot "$sdk" -miphoneos-version-min=17.0 -fobjc-arc -O2 "${extra_flags[@]}" "$here/App.m" "$out/probe.o" "$out/osmesa_host.o" "${extra_objects[@]}" -framework UIKit -framework Foundation -framework CoreGraphics -Wl,-rpath,@executable_path/Frameworks -o "$app/UnleashedRendererProbe"
 python3 - "$app/Info.plist" <<'PY'
 import plistlib,sys
-with open(sys.argv[1],'wb') as f: plistlib.dump(dict(CFBundleIdentifier='am.arjunkl.unleashed.rendererprobe',CFBundleExecutable='UnleashedRendererProbe',CFBundleName='UNLEASHED Renderer Probe',CFBundlePackageType='APPL',CFBundleShortVersionString='0.0.1',CFBundleVersion='2',MinimumOSVersion='17.0',UIDeviceFamily=[1,2],LSRequiresIPhoneOS=True,UILaunchScreen={},UIFileSharingEnabled=True,LSSupportsOpeningDocumentsInPlace=True,UISupportedInterfaceOrientations=['UIInterfaceOrientationLandscapeLeft','UIInterfaceOrientationLandscapeRight']),f)
+with open(sys.argv[1],'wb') as f: plistlib.dump(dict(CFBundleIdentifier='am.arjunkl.unleashed.rendererprobe',CFBundleExecutable='UnleashedRendererProbe',CFBundleName='UNLEASHED Renderer Probe',CFBundlePackageType='APPL',CFBundleShortVersionString='0.0.1',CFBundleVersion='3',MinimumOSVersion='17.0',UIDeviceFamily=[1,2],LSRequiresIPhoneOS=True,UILaunchScreen={},UIFileSharingEnabled=True,LSSupportsOpeningDocumentsInPlace=True,UISupportedInterfaceOrientations=['UIInterfaceOrientationLandscapeLeft','UIInterfaceOrientationLandscapeRight']),f)
 PY
 for lib in "$app/Frameworks/"*.dylib; do codesign --force --sign - "$lib"; done
 codesign --force --sign - "$app"

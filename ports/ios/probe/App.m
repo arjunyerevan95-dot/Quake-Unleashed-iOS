@@ -32,7 +32,7 @@
 }
 - (void)run:(UIButton*)sender {
  for(UIView*v in sender.superview.subviews)if([v isKindOfClass:UIButton.class])((UIButton*)v).enabled=NO;
- self.text.text=@"Running isolated context / compute / SSBO / image / draw test…";
+ self.text.text=@"Running engine shader compilation, program linking and textured GUI draw…";
  BOOL experimental=sender.tag!=0;
 #ifdef QVR_SHADER_GATE
  setenv("QVR_SHADER_DIR", [[NSBundle.mainBundle.resourcePath stringByAppendingPathComponent:@"shader-corpus"] UTF8String], 1);
@@ -45,14 +45,12 @@
   [report writeToFile:[docs stringByAppendingPathComponent:@"renderer-probe.txt"] atomically:YES encoding:NSUTF8StringEncoding error:nil];
   NSData*data=[NSData dataWithBytes:result.rgba length:4];
   dispatch_async(dispatch_get_main_queue(),^{
-   self.text.text=[report stringByAppendingString:@"\n\nDiagnostic only. The shader-gate build tests engine stage compilation, not program linking or gameplay. No live Metal presentation or frame-rate validation yet. Restart before testing again."];
+   self.text.text=[report stringByAppendingString:@"\n\nDiagnostic only. The v3 gate tests 42 shader stages, 24 baseline program links and actual GUI textured draw/readback. Tile is a CPU-read-back pixel. No gameplay. No live Metal presentation or frame-rate validation yet. Restart before testing again."];
    if(result.passed){
-#ifndef QVR_SHADER_GATE
     CGDataProviderRef provider=CGDataProviderCreateWithCFData((__bridge CFDataRef)data);
     CGColorSpaceRef space=CGColorSpaceCreateDeviceRGB();
     CGImageRef image=CGImageCreate(1,1,8,32,4,space,kCGImageAlphaLast|kCGBitmapByteOrderDefault,provider,NULL,NO,kCGRenderingIntentDefault);
     self.pixel.image=[UIImage imageWithCGImage:image];CGImageRelease(image);CGColorSpaceRelease(space);CGDataProviderRelease(provider);
-#endif
    }
   });
  });

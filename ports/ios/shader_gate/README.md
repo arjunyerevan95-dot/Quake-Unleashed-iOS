@@ -20,3 +20,14 @@ The generated GLSL retains upstream GPL-2.0-or-later terms. Its exact editable
 source is the pinned upstream gl_shaders.h and included vr headers. The workflow
 fetches that source explicitly, retains the upstream license in the corpus, and
 records source commit and per-stage hashes. No retail assets are needed.
+
+## Gate 3
+User device result for v2: 42 stage tests, zero failures on A18 Pro experimental
+Zink context. V3 now links 24 baseline programs (including three alias-model
+pose formats and six compute programs), then uses the actual upstream GUI
+program to draw generated geometry with a generated green texture. It validates
+the expected RGB pixel readback and presents that pixel through UIKit.
+Linux baseline: 42 stages and 24 links pass; textured GUI readback passes.
+iPhone v3 pending. This is not a moving scene, skinned-model draw, native Metal
+swapchain or performance test. World-depth and effect permutations beyond the
+baseline are not covered.
