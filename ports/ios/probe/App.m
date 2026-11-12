@@ -1,4 +1,5 @@
 #import <UIKit/UIKit.h>
+#include <stdlib.h>
 #include "probe.h"
 
 /* Asset-free diagnostic host, not a game launcher. Software readback presentation
@@ -33,6 +34,9 @@
  for(UIView*v in sender.superview.subviews)if([v isKindOfClass:UIButton.class])((UIButton*)v).enabled=NO;
  self.text.text=@"Running isolated context / compute / SSBO / image / draw test…";
  BOOL experimental=sender.tag!=0;
+#ifdef QVR_SHADER_GATE
+ setenv("QVR_SHADER_DIR", [[NSBundle.mainBundle.resourcePath stringByAppendingPathComponent:@"shader-corpus"] UTF8String], 1);
+#endif
  NSString*dir=NSBundle.mainBundle.privateFrameworksPath;
  dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED,0),^{
   qvru_probe_result result=qvru_osmesa_probe([[dir stringByAppendingPathComponent:@"libOSMesa.dylib"] UTF8String],[[dir stringByAppendingPathComponent:@"libMoltenVK.dylib"] UTF8String],experimental);
@@ -41,12 +45,14 @@
   [report writeToFile:[docs stringByAppendingPathComponent:@"renderer-probe.txt"] atomically:YES encoding:NSUTF8StringEncoding error:nil];
   NSData*data=[NSData dataWithBytes:result.rgba length:4];
   dispatch_async(dispatch_get_main_queue(),^{
-   self.text.text=[report stringByAppendingString:@"\n\nThe tile is a CPU-read-back pixel shown by UIKit. No game, full shader corpus, live Metal presentation or frame-rate validation yet. Restart before testing again."];
+   self.text.text=[report stringByAppendingString:@"\n\nDiagnostic only. The shader-gate build tests engine stage compilation, not program linking or gameplay. No live Metal presentation or frame-rate validation yet. Restart before testing again."];
    if(result.passed){
+#ifndef QVR_SHADER_GATE
     CGDataProviderRef provider=CGDataProviderCreateWithCFData((__bridge CFDataRef)data);
     CGColorSpaceRef space=CGColorSpaceCreateDeviceRGB();
     CGImageRef image=CGImageCreate(1,1,8,32,4,space,kCGImageAlphaLast|kCGBitmapByteOrderDefault,provider,NULL,NO,kCGRenderingIntentDefault);
     self.pixel.image=[UIImage imageWithCGImage:image];CGImageRelease(image);CGColorSpaceRelease(space);CGDataProviderRelease(provider);
+#endif
    }
   });
  });

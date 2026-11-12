@@ -12,11 +12,24 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: vittorioromeo/quakevr
+          ref: 9192b03797cfa3a724d1f71c4b42609ff52865a4
+          path: upstream-shader-source
+          persist-credentials: false
+      - name: Export pinned engine shaders (no game assets)
+        run: |
+          python3 ports/ios/shader_gate/export.py "$RUNNER_TEMP/shader-corpus" upstream-shader-source
+          cp upstream-shader-source/LICENSE.txt "$RUNNER_TEMP/shader-corpus/UPSTREAM-LICENSE" 
       - name: Fetch pinned native dependency donor (no game assets)
         run: |
           curl --fail --location --retry 2 --max-time 180 https://github.com/thebcd69/bcd-games/releases/download/v0.1.653/BCD.ipa -o "$RUNNER_TEMP/native-donor.ipa"
           python3 ports/ios/probe/extract_inputs.py "$RUNNER_TEMP/native-donor.ipa" "$RUNNER_TEMP/native-inputs"
       - name: Compile and package minimal native diagnostic
+        env:
+          QVR_SHADER_GATE: '1'
+          QVR_SHADER_CORPUS: ${{ runner.temp }}/shader-corpus
         run: bash ports/ios/probe/build_probe.sh "$RUNNER_TEMP/native-inputs" "$RUNNER_TEMP/probe-output"
       - uses: actions/upload-artifact@v4
         with:
