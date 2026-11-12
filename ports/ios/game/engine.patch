@@ -57,6 +57,50 @@ index 643a56c..645c9cf 100644
  	target_link_libraries(ironwail PRIVATE OpenGL::OpenGL)
  else()
  	target_link_libraries(ironwail PRIVATE OpenGL::GL)
+diff --git a/Quake/gl_vidsdl.c b/Quake/gl_vidsdl.c
+index b82a8d5..856e0d3 100644
+--- a/Quake/gl_vidsdl.c
++++ b/Quake/gl_vidsdl.c
+@@ -36,7 +36,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+ #endif
+ 
+ //ericw -- for putting the driver into multithreaded mode
+-#ifdef __APPLE__
++#if defined(__APPLE__) && !defined(QVR_IOS)
+ #include <OpenGL/OpenGL.h>
+ #endif
+ 
+@@ -1443,7 +1443,7 @@ static void GL_Init (void)
+ 	--ssbo_align;
+ 	--ubo_align;
+ 
+-#ifdef __APPLE__
++#if defined(__APPLE__) && !defined(QVR_IOS)
+ 	// ericw -- enable multi-threaded OpenGL, gives a decent FPS boost.
+ 	// https://developer.apple.com/library/mac/technotes/tn2085/
+ 	if (host_parms->numcpus > 1 &&
+diff --git a/Quake/in_sdl.c b/Quake/in_sdl.c
+index 83bbe65..a9cdc77 100644
+--- a/Quake/in_sdl.c
++++ b/Quake/in_sdl.c
+@@ -41,7 +41,7 @@ static keydevice_t lastactivetype = KD_NONE;
+ 
+ static cvar_t in_debugkeys = {"in_debugkeys", "0", CVAR_NONE};
+ 
+-#ifdef __APPLE__
++#if defined(__APPLE__) && !defined(QVR_IOS)
+ /* Mouse acceleration needs to be disabled on OS X */
+ #define MACOS_X_ACCELERATION_HACK
+ #endif
+@@ -180,7 +180,7 @@ void IN_ShowCursor (void)
+ 
+ void IN_HideCursor (void)
+ {
+-#ifdef __APPLE__
++#if defined(__APPLE__) && !defined(QVR_IOS)
+ 	{
+ 		// Work around https://github.com/sezero/quakespasm/issues/48
+ 		int width, height;
 diff --git a/Quake/main_sdl.c b/Quake/main_sdl.c
 index d2670b6..938b013 100644
 --- a/Quake/main_sdl.c
