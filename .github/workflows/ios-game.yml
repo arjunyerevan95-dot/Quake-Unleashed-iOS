@@ -1,0 +1,43 @@
+name: UNLEASHED iOS game launch candidate
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: unleashed-ios-game
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: vittorioromeo/quakevr
+          ref: 9192b03797cfa3a724d1f71c4b42609ff52865a4
+          path: engine
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: libsdl-org/SDL
+          ref: 5d249570393f7a37e037abf22cd6012a4cc56a71
+          path: SDL
+          persist-credentials: false
+      - name: Apply isolated iOS adapter
+        run: |
+          git -C engine apply ../ports/ios/game/engine.patch
+          mkdir -p engine/ports/ios
+          cp -R ports/ios/game engine/ports/ios/game
+      - name: Fetch verified native libraries
+        run: |
+          curl --fail --location --retry 2 --max-time 180 https://github.com/thebcd69/bcd-games/releases/download/v0.1.653/BCD.ipa -o "$RUNNER_TEMP/native-donor.ipa"
+          python3 ports/ios/probe/extract_inputs.py "$RUNNER_TEMP/native-donor.ipa" "$RUNNER_TEMP/native-inputs"
+      - name: Compile real engine without retail data
+        run: bash ports/ios/game/build_game.sh "$GITHUB_WORKSPACE/engine" "$GITHUB_WORKSPACE/SDL" "$RUNNER_TEMP/native-inputs" "$RUNNER_TEMP/game-output"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Unleashed-launch-candidate
+          path: ${{ runner.temp }}/game-output/Unleashed-launch-candidate.ipa
+          if-no-files-found: error
+          retention-days: 7

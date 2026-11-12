@@ -1,0 +1,112 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 643a56c..645c9cf 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -8,13 +8,28 @@ if (WIN32)
+ 	list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/Windows/cmake-modules)
+ endif()
+ 
+-find_package(SDL2 REQUIRED)
+-find_package(OpenGL REQUIRED)
+-find_package(CURL)
++if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
++    set(QVR_IOS TRUE)
++    enable_language(OBJC)
++    if(NOT QVR_SDL_SOURCE OR NOT QVR_NATIVE_INPUTS)
++        message(FATAL_ERROR "Set QVR_SDL_SOURCE and QVR_NATIVE_INPUTS for iOS")
++    endif()
++    set(SDL_SHARED OFF CACHE BOOL "" FORCE)
++    set(SDL_STATIC ON CACHE BOOL "" FORCE)
++    set(SDL_TEST OFF CACHE BOOL "" FORCE)
++    add_subdirectory(${QVR_SDL_SOURCE} sdl2)
++    if(NOT TARGET SDL2::SDL2)
++        add_library(SDL2::SDL2 ALIAS SDL2-static)
++    endif()
++else()
++    find_package(SDL2 REQUIRED)
++    find_package(OpenGL REQUIRED)
++    find_package(CURL)
++endif()
+ 
+ find_package(PkgConfig)
+ 
+-if (PKG_CONFIG_FOUND)
++if (PKG_CONFIG_FOUND AND NOT QVR_IOS)
+     pkg_check_modules(PC_MPG123 IMPORTED_TARGET libmpg123)
+     pkg_check_modules(PC_MAD IMPORTED_TARGET mad)
+     pkg_check_modules(PC_OPUSFILE IMPORTED_TARGET opusfile)
+@@ -64,7 +79,9 @@ add_executable(ironwail ${IWAIL_SRC})
+ include(Quake/vr/vr.cmake) # QVR
+ if (UNIX)
+ 	target_link_libraries(ironwail PRIVATE m)
+-	set(ENABLE_USERDIRS TRUE CACHE STRING "Enable user directories")
++	if(NOT QVR_IOS)
++        set(ENABLE_USERDIRS TRUE CACHE STRING "Enable user directories")
++    endif()
+ elseif (WIN32)
+ 	target_link_libraries(ironwail PRIVATE ws2_32 Winmm)
+ 	if (MINGW)
+@@ -85,7 +102,9 @@ else()
+ 	target_compile_definitions(ironwail PRIVATE WITHOUT_CURL)
+ endif()
+ 
+-if (OpenGL::OpenGL)
++if(QVR_IOS)
++    include(ports/ios/game/game.cmake)
++elseif (TARGET OpenGL::OpenGL)
+ 	target_link_libraries(ironwail PRIVATE OpenGL::OpenGL)
+ else()
+ 	target_link_libraries(ironwail PRIVATE OpenGL::GL)
+diff --git a/Quake/main_sdl.c b/Quake/main_sdl.c
+index d2670b6..938b013 100644
+--- a/Quake/main_sdl.c
++++ b/Quake/main_sdl.c
+@@ -120,7 +120,20 @@ static double Sys_Throttle (double oldtime)
+ 
+ #define DEFAULT_MEMORY (384 * 1024 * 1024) // ericw -- was 72MB (64-bit) / 64MB (32-bit)
+ 
+-static quakeparms_t	parms;
++static quakeparms_t parms;
++#ifdef QVR_IOS
++extern void QVR_IOSBootstrap(int *, char ***);
++extern int QVR_IOSStartFrames(void (*)(void *));
++static double ios_oldtime;
++static void QVR_IOSFrame(void *unused)
++{
++    (void)unused;
++    double now = Sys_DoubleTime();
++    scr_skipupdate = VID_IsMinimized();
++    Host_Frame(now - ios_oldtime);
++    ios_oldtime = now;
++}
++#endif
+ 
+ // On OS X we call SDL_main from the launcher, but SDL2 doesn't redefine main
+ // as SDL_main on OS X anymore, so we do it ourselves.
+@@ -133,7 +146,10 @@ int main(int argc, char *argv[])
+ 	int		t;
+ 	double		time, oldtime, newtime;
+ 
+-	host_parms = &parms;
++	#ifdef QVR_IOS
++    QVR_IOSBootstrap(&argc, &argv);
++#endif
++    host_parms = &parms;
+ 	parms.basedir = ".";
+ 
+ 	parms.argc = argc;
+@@ -173,7 +189,13 @@ int main(int argc, char *argv[])
+ 	Host_Init();
+ 
+ 	oldtime = Sys_DoubleTime();
+-	if (isDedicated)
++#ifdef QVR_IOS
++    ios_oldtime = oldtime;
++    if (QVR_IOSStartFrames(QVR_IOSFrame) != 0)
++        Sys_Error("Unable to start iOS frames: %s", SDL_GetError());
++    return 0; /* UIKit owns the event loop, never block its main thread. */
++#endif
++    if (isDedicated)
+ 	{
+ 		while (1)
+ 		{
