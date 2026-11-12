@@ -192,6 +192,94 @@ index 7862a1e..d8d48ee 100644
  
  // One pose: for each vertex, the share of cosine-weighted rays over its hemisphere that the model's own triangles
  // stop within `reach` (a hit counts less the farther it is: 1 - t / reach). The same bytes as testing every triangle
+diff --git a/Quake/vr/vr_audio.cpp b/Quake/vr/vr_audio.cpp
+index 5061cc1..433663c 100644
+--- a/Quake/vr/vr_audio.cpp
++++ b/Quake/vr/vr_audio.cpp
+@@ -73,7 +73,9 @@
+ #include "vr_audio_internal.hpp"
+ #include "vr_api.h"
+ 
+-#include <emmintrin.h> // (SSE2: x64's baseline)
++#if defined(__SSE2__)
++#include <emmintrin.h> // SSE2 only on x86; ARM uses scalar audio below.
++#endif
+ #include <stdio.h>
+ 
+ namespace qvr::audio
+@@ -789,7 +791,13 @@ void Mixer::reverbDecode(int blocks, const Features& f, float* toL, float* toR,
+     {
+         while(reverbConvolved.loadAcquire() <= b)
+         {
++#if defined(__SSE2__)
+             _mm_pause();
++#elif defined(__aarch64__)
++            __asm__ __volatile__("yield");
++#else
++            SDL_Delay(0);
++#endif
+         }
+         if(reverbRan[b])
+         {
+@@ -1109,6 +1117,7 @@ void AntiAlias::applyOne(float* x, za::Vector<float>& history, int& quiet, int n
+     za::copy(x, x + n, work.begin() + h);
+     const float* c = kernel.data();
+     int i = 0;
++    #if defined(__SSE2__)
+     // Four outputs at a time, each lane the scalar loop's own sums in its order (the same results, bit for bit).
+     for(; i + 4 <= n; i += 4)
+     {
+@@ -1134,6 +1143,7 @@ void AntiAlias::applyOne(float* x, za::Vector<float>& history, int& quiet, int n
+         }
+         _mm_storeu_ps(x + i, y);
+     }
++    #endif
+     for(; i < n; i++)
+     {
+         // (symmetric: the kernel the same reversed; eight sums, for the compiler to keep in lanes)
+diff --git a/Quake/vr/vr_audio_internal.hpp b/Quake/vr/vr_audio_internal.hpp
+index 3edee4c..3924d38 100644
+--- a/Quake/vr/vr_audio_internal.hpp
++++ b/Quake/vr/vr_audio_internal.hpp
+@@ -41,7 +41,9 @@
+ #include "Zancle/Math/Sin.hpp"
+ #include "Zancle/String/String.hpp"
+ #include "vr_zancle.hpp"
+-#include <emmintrin.h> // (SSE2: x64's baseline)
++#if defined(__SSE2__)
++#include <emmintrin.h> // SSE2 only on x86; ARM uses scalar audio below.
++#endif
+ #include <stdio.h>
+ 
+ namespace qvr::audio::detail
+diff --git a/Quake/vr/vr_audio_io.cpp b/Quake/vr/vr_audio_io.cpp
+index 4cf6fd6..e128c15 100644
+--- a/Quake/vr/vr_audio_io.cpp
++++ b/Quake/vr/vr_audio_io.cpp
+@@ -268,6 +268,7 @@ float fullBandAt(const short* x, int length, int loop, double pos)
+         // another order: within a few units in the last place).
+         static_assert(interpTaps % 8 == 0);
+         const short* s = x + first;
++#if defined(__SSE2__)
+         __m128 acc0 = _mm_setzero_ps();
+         __m128 acc1 = _mm_setzero_ps();
+         for(int j = 0; j < interpTaps; j += 8)
+@@ -282,6 +283,15 @@ float fullBandAt(const short* x, int length, int loop, double pos)
+         sum = _mm_add_ps(sum, _mm_movehl_ps(sum, sum));
+         sum = _mm_add_ss(sum, _mm_shuffle_ps(sum, sum, 1));
+         return _mm_cvtss_f32(sum);
++#else
++        // Match SSE's eight independent accumulators and reduction order.
++        float acc[8]{};
++        for(int j = 0; j < interpTaps; j += 8)
++            for(int k = 0; k < 8; ++k)
++                acc[k] += row[j + k] * static_cast<float>(s[j + k]);
++        return ((acc[0] + acc[4]) + (acc[2] + acc[6])) +
++               ((acc[1] + acc[5]) + (acc[3] + acc[7]));
++#endif
+     }
+     // Past the end: the loop's start again (or silence); before the start: a loop from 0's end (or silence).
+     const int loopLen = loop >= 0 && loop < length ? length - loop : 0;
 diff --git a/Quake/vr/vr_blender.cpp b/Quake/vr/vr_blender.cpp
 index 82c4861..a6b7b84 100644
 --- a/Quake/vr/vr_blender.cpp
