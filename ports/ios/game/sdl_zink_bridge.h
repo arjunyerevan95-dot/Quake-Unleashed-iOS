@@ -2,6 +2,14 @@
  * Initial correctness path, not a zero-copy/performance solution. */
 #pragma once
 #include "SDL.h"
+/* SDL suppresses desktop GL declarations on iOS. Mesa provides that API here;
+ * restore the platform macro immediately after importing declarations only. */
+#ifdef QVR_IOS
+#pragma push_macro("__IPHONEOS__")
+#undef __IPHONEOS__
+#include "SDL_opengl.h"
+#pragma pop_macro("__IPHONEOS__")
+#endif
 #ifdef __cplusplus
 extern "C" {
 #endif
