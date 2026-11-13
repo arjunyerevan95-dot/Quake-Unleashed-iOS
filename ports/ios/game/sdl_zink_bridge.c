@@ -27,8 +27,10 @@ void QVR_IOSSuspend(void){
 }
 void QVR_IOSResume(void){suspended=0;QVR_TouchReset();fprintf(stderr,"UNLEASHED lifecycle resumed\n");}
 int QVR_IOSCanRender(void){
- int w=0,h=0;if(game_window)SDL_GetWindowSize(game_window,&w,&h);
- return !suspended && QVR_IOSApplicationActive() && w>=h && h>0;
+ /* A transient portrait SDL size during UIKit rotation must not deadlock the
+    frame loop. The scene is fixed landscape; SDL letterboxes until layout settles.
+    Only lifecycle state, not orientation, is a GPU submission permission gate. */
+ return game_window && !suspended && QVR_IOSApplicationActive();
 }
 static int width=640,height=360,attrs[64],interval=1;
 SDL_Window *QVR_CreateWindow(const char*t,int x,int y,int w,int h,Uint32 flags){

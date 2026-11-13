@@ -48,8 +48,9 @@ void QVR_IOSBootstrap(int *argc, char ***argv)
         setenv("QVR_MOLTENVK_LIBRARY", [[frameworks stringByAppendingPathComponent:
             @"libMoltenVK.dylib"] fileSystemRepresentation], 1);
         static char *args[] = {"Unleashed", "-basedir", ".", "-width", "640",
-            "-height", "360", "-window", "-game", "quakevr", "+vr_enabled", "0", NULL};
-        *argc = 12;
+            "-height", "360", "-window", "-game", "quakevr", "-flatscreenmode", "+vr_enabled", "0",
+            "+vr_flat_holsters", "0", "+vr_flat_autoreload", "1", NULL};
+        *argc = 17;
         *argv = args;
         fprintf(stderr, "UNLEASHED iOS launch candidate: private data %s/id1\n",
             documents.fileSystemRepresentation);

@@ -177,7 +177,7 @@ index 162abe4..99df1fe 100644
  // allow mice or other external controllers to add commands
  	IN_Commands ();
 diff --git a/Quake/in_sdl.c b/Quake/in_sdl.c
-index 83bbe65..7a40cad 100644
+index 83bbe65..0f3f644 100644
 --- a/Quake/in_sdl.c
 +++ b/Quake/in_sdl.c
 @@ -25,6 +25,9 @@ https://github.com/yquake2/yquake2/blob/master/src/client/input/sdl.c
@@ -229,7 +229,7 @@ index 83bbe65..7a40cad 100644
 +            if(!keybindings[K_RTRIGGER] || !*keybindings[K_RTRIGGER])Key_SetBinding(K_RTRIGGER,"+attack");
 +            if(!keybindings[K_ABUTTON] || !*keybindings[K_ABUTTON])Key_SetBinding(K_ABUTTON,"+jump");
 +            if(!keybindings[K_BBUTTON] || !*keybindings[K_BBUTTON])Key_SetBinding(K_BBUTTON,"impulse 10");
-+            if(!keybindings[K_YBUTTON] || !*keybindings[K_YBUTTON])Key_SetBinding(K_YBUTTON,"impulse 12");
++            if(!keybindings[K_YBUTTON] || !*keybindings[K_YBUTTON] || !strcmp(keybindings[K_YBUTTON],"impulse 12"))Key_SetBinding(K_YBUTTON,"impulse 15");
 +            if(touch_device>=0 && joy_active_device!=touch_device)IN_UseController(touch_device);
 +            IN_Commands(); continue;
 +        }
@@ -311,6 +311,45 @@ index d2670b6..b35d40c 100644
  	{
  		while (1)
  		{
+diff --git a/Quake/menu.c b/Quake/menu.c
+index a3963ca..303f8aa 100644
+--- a/Quake/menu.c
++++ b/Quake/menu.c
+@@ -1509,6 +1509,9 @@ const char *M_Main_RowLabel (void) // QVR: menu_vr pos
+ // for it (Advanced VR > HUD and Menus > Menu; Options > Mods has it).
+ static qboolean M_Main_Shown (int item)
+ {
++#ifdef QVR_IOS
++	if(item == MAIN_VRCALIBRATION || item == MAIN_VRTUTORIAL || item == MAIN_VRHUB || item == MAIN_VRSETTINGS || item == MAIN_VRADVANCED)return false;
++#endif
+ 	if (item == MAIN_CONTINUE) // QVR: only with a save to continue (vr_continue.cpp)
+ 		return VR_ContinueAvailable ();
+ 	if (item == MAIN_LOADAUTOSAVE) // QVR: only with an autosave to load
+@@ -8683,7 +8686,9 @@ void M_DrawPanel (void)
+ 		break;
+ 	}
+ 
++#ifndef QVR_IOS
+ 	VR_MenuDrawOverlay (); // QVR: the "Back to game" button
++#endif
+ 	VR_MenuDrawStatus (); // QVR: the status box (vr_menu_status)
+ 	draw_textoutline = 0.f; // QVR
+ 	Draw_SetMenuRecolor (recolor); // QVR
+@@ -8735,7 +8740,13 @@ void M_Keydown (int key, qboolean repeat)
+ 		}
+ 	}
+ 
+-	if (!bind_grab && m_state != m_confirm && m_state != m_quit && VR_MenuKey (key, repeat)) // QVR: the corner's buttons (Back to game, Advanced VR, Levels); not under a dialog (Quit's: Escape back to the menu under it)
++	if (!bind_grab && m_state != m_confirm && m_state != m_quit
++#ifndef QVR_IOS
++        && VR_MenuKey (key, repeat)
++#else
++        && false
++#endif
++        ) // QVR: the corner's buttons (Back to game, Advanced VR, Levels); not under a dialog (Quit's: Escape back to the menu under it)
+ 		return;
+ 
+ 	switch (M_GetBaseState (m_state))
 diff --git a/Quake/sys_sdl_unix.c b/Quake/sys_sdl_unix.c
 index 0319c05..c0384d7 100644
 --- a/Quake/sys_sdl_unix.c
