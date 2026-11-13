@@ -4,6 +4,8 @@
 #include <assert.h>
 static void finger(Uint32 type, Sint64 id,float x,float y,int menu){SDL_Event e;SDL_zero(e);e.type=type;e.tfinger.fingerId=id;e.tfinger.x=x;e.tfinger.y=y;assert(QVR_TouchEvent(&e,menu));}
 int main(void){
+ /* Dummy/hidden window has no OS focus. Permit synthetic controller input in this headless harness. */
+ SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS,"1");
  SDL_SetMainReady();assert(SDL_Init(SDL_INIT_VIDEO|SDL_INIT_GAMECONTROLLER)==0);
  SDL_Window*w=SDL_CreateWindow("test",0,0,960,480,SDL_WINDOW_HIDDEN);assert(w);
  assert(QVR_TouchInit(w)==0);assert(SDL_IsGameController(device));
