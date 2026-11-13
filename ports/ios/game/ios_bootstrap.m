@@ -15,6 +15,15 @@ void QVR_IOSRequestLandscape(SDL_Window *window) {
    [ui.windowScene requestGeometryUpdateWithPreferences:preferences errorHandler:^(NSError *error){fprintf(stderr,"UNLEASHED landscape request: %s\n",error.localizedDescription.UTF8String);}];
  }
 }
+/* SDL sensors remain in portrait device axes. Map to the current landscape. */
+float QVR_IOSLandscapeSign(void) {
+ SDL_SysWMinfo info;SDL_VERSION(&info.version);
+ if(!orientationWindow||!SDL_GetWindowWMInfo(orientationWindow,&info))return 0.f;
+ UIInterfaceOrientation o=info.info.uikit.window.windowScene.interfaceOrientation;
+ if(o==UIInterfaceOrientationLandscapeLeft)return 1.f;
+ if(o==UIInterfaceOrientationLandscapeRight)return -1.f;
+ return 0.f;
+}
 extern void QVR_IOSSuspend(void);
 extern void QVR_IOSResume(void);
 int QVR_IOSApplicationActive(void) { return UIApplication.sharedApplication.applicationState == UIApplicationStateActive; }

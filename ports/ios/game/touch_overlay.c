@@ -4,17 +4,69 @@
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
+#include "touch_layout.h"
 #define NF 12
 static SDL_Joystick *pad;
 static SDL_Window *window;
 static int device = -1, menuMode;
 static float aspect = 16.f/9.f;
 static struct Finger { SDL_FingerID id; int used, role; float x,y,ox,oy,rx,ry; } fingers[NF];
-enum { LOOK, MOVE, FIRE, JUMP, NEXT, PREV, MENU, BACK };
-static const struct {float x,y; int role;} buttons[] = {
- { .64f,.78f,FIRE },{ .82f,.78f,JUMP },{ .92f,.59f,NEXT },
- { .81f,.59f,PREV },{ .93f,.12f,MENU },{ .75f,.12f,BACK }
-};
+enum { LOOK, MOVE, FIRE, JUMP, NEXT, PREV, MENU, BACK, CROUCH, GYRO, ROLE_COUNT };
+#define DEFAULT_LAYOUT { {.78f,.78f,1.0f,FIRE},{.89f,.67f,1.0f,JUMP}, \
+ {.95f,.49f,1.0f,NEXT},{.84f,.49f,1.0f,PREV},{.95f,.12f,1.0f,MENU}, \
+ {.72f,.12f,1.0f,BACK},{.94f,.83f,1.0f,CROUCH},{.87f,.12f,1.0f,GYRO}, \
+ {.15f,.76f,1.0f,MOVE} }
+static QVR_TouchItem buttons[]=DEFAULT_LAYOUT;
+static const QVR_TouchItem defaults[]=DEFAULT_LAYOUT;
+#define NB ((int)(sizeof buttons/sizeof buttons[0]))
+static QVR_TouchItem editSaved[NB];
+static int editing,selected=-1,editDrag=-1,editResize,saveFailed;
+static SDL_FingerID editFinger;
+static char layoutPath[1024]="touch-layout-v1.cfg";
+static SDL_Sensor *gyroSensor;
+static int gyroEnabled,gyroBackground,gyroIndex=-1;
+static Uint64 gyroTimestamp;
+static Uint32 gyroFreshTick;
+static void gyroBaseline(void){float v[3];gyroFreshTick=SDL_GetTicks()-100;if(gyroSensor){SDL_SensorUpdate();SDL_SensorGetDataWithTimestamp(gyroSensor,&gyroTimestamp,v,3);}}
+int QVR_TouchGyro(float out[3]){
+ if(menuMode||editing||gyroBackground||!gyroEnabled||!gyroSensor)return 0;
+ SDL_SensorUpdate();Uint64 stamp=0;
+ if(SDL_SensorGetDataWithTimestamp(gyroSensor,&stamp,out,3)!=0||!stamp)return 0;
+ Uint32 now=SDL_GetTicks();
+ if(stamp!=gyroTimestamp){gyroTimestamp=stamp;gyroFreshTick=now;}
+ return (Uint32)(now-gyroFreshTick)<100&&isfinite(out[0])&&isfinite(out[1])&&isfinite(out[2]);
+}
+int QVR_TouchGyroAvailable(void){return gyroIndex>=0;}
+static void gyroStreaming(void){
+ if(gyroEnabled&&!gyroBackground&&gyroIndex>=0){if(!gyroSensor)gyroSensor=SDL_SensorOpen(gyroIndex);if(!gyroSensor)gyroEnabled=0;else gyroBaseline();}
+ else if(gyroSensor){SDL_SensorClose(gyroSensor);gyroSensor=NULL;}
+}
+static float itemRadius(int i){return (buttons[i].role==MOVE?.15f:buttons[i].role==FIRE?.09f:.065f)*buttons[i].scale;}
+int QVR_TouchEditing(void){return editing;}
+static void beginEdit(void){QVR_TouchReset();memcpy(editSaved,buttons,sizeof buttons);editing=1;selected=editDrag=-1;saveFailed=0;}
+static void cancelEdit(void){memcpy(buttons,editSaved,sizeof buttons);editing=0;editDrag=-1;QVR_TouchReset();}
+static void clampItem(int i){float r=itemRadius(i);buttons[i].x=fmaxf(r/aspect,fminf(1-r/aspect,buttons[i].x));buttons[i].y=fmaxf(r,fminf(1-r,buttons[i].y));}
+static int hit(float x,float y,float cx,float cy,float r){float dx=(x-cx)*aspect,dy=y-cy;return dx*dx+dy*dy<r*r;}
+static void editEvent(const SDL_Event*e){
+ float x=e->tfinger.x,y=e->tfinger.y;
+ if(e->type==SDL_FINGERDOWN){
+  if(editDrag>=0)return;
+  /* Persistent toolbar: cancel, reset, save. */
+  if(hit(x,y,.42f,.1f,.065f)){cancelEdit();return;}
+  if(hit(x,y,.50f,.1f,.065f)){memcpy(buttons,defaults,sizeof buttons);selected=-1;return;}
+  if(hit(x,y,.58f,.1f,.065f)){
+   if(QVR_LayoutSave(layoutPath,buttons,NB)==0){editing=0;QVR_TouchReset();}else saveFailed=1;return;
+  }
+  if(selected>=0){float r=itemRadius(selected);if(hit(x,y,buttons[selected].x+r/aspect,buttons[selected].y+r,.045f)){editDrag=selected;editResize=1;editFinger=e->tfinger.fingerId;return;}}
+  selected=-1;
+  for(int i=0;i<NB;i++)if(hit(x,y,buttons[i].x,buttons[i].y,itemRadius(i))){selected=editDrag=i;editResize=0;editFinger=e->tfinger.fingerId;break;}
+ }else if(editDrag>=0&&e->tfinger.fingerId==editFinger){
+  if(e->type==SDL_FINGERUP){editDrag=-1;return;}
+  QVR_TouchItem*b=&buttons[editDrag];
+  if(editResize){float dx=(x-b->x)*aspect,dy=y-b->y;float base=b->role==MOVE?.15f:b->role==FIRE?.09f:.065f;b->scale=fmaxf(.6f,fminf(1.8f,sqrtf(dx*dx+dy*dy)/(base*1.41421356f)));}
+  else{b->x=x;b->y=y;}clampItem(editDrag);
+ }
+}
 static void axis(int a,float v) { if(pad) SDL_JoystickSetVirtualAxis(pad,a,(Sint16)(fmaxf(-1,fminf(1,v))*32767)); }
 static void button(int b,int v) { if(pad) SDL_JoystickSetVirtualButton(pad,b,(Uint8)(v!=0)); }
 void QVR_TouchReset(void) {
@@ -27,6 +79,8 @@ void QVR_TouchReset(void) {
 int QVR_TouchInit(SDL_Window *w) {
  if(pad)return 0;
  window=w;
+ QVR_LayoutLoad(layoutPath,buttons,NB);
+ if(SDL_InitSubSystem(SDL_INIT_SENSOR)==0)for(int i=0;i<SDL_NumSensors();i++)if(SDL_SensorGetDeviceType(i)==SDL_SENSOR_GYRO){gyroIndex=i;break;}
  SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS,"0");
  SDL_SetHint(SDL_HINT_MOUSE_TOUCH_EVENTS,"0");
  if(SDL_InitSubSystem(SDL_INIT_GAMECONTROLLER)!=0)return -1;
@@ -54,10 +108,10 @@ int QVR_TouchDeviceIndex(void) {
  return -1;
 }
 static void state(void) {
- int held[8]={0};float mx=0,my=0;
+ int held[ROLE_COUNT]={0};float mx=0,my=0;
  for(int i=0;i<NF;i++)if(fingers[i].used){
   struct Finger*f=&fingers[i];held[f->role]=1;
-  if(f->role==MOVE){mx=(f->x-f->ox)*aspect/.15f;my=(f->y-f->oy)/.15f;float n=sqrtf(mx*mx+my*my);if(n>1){mx/=n;my/=n;}}
+  if(f->role==MOVE){float radius=.15f;for(int b=0;b<NB;b++)if(buttons[b].role==MOVE)radius=itemRadius(b);mx=(f->x-f->ox)*aspect/radius;my=(f->y-f->oy)/radius;float n=sqrtf(mx*mx+my*my);if(n>1){mx/=n;my/=n;}}
  }
  axis(SDL_CONTROLLER_AXIS_LEFTX,menuMode?0:mx);axis(SDL_CONTROLLER_AXIS_LEFTY,menuMode?0:my);
  axis(SDL_CONTROLLER_AXIS_TRIGGERRIGHT,held[FIRE]&&!menuMode?1:-1);
@@ -65,6 +119,7 @@ static void state(void) {
  button(SDL_CONTROLLER_BUTTON_A,held[JUMP]||(menuMode&&held[FIRE]));
  button(SDL_CONTROLLER_BUTTON_B,held[NEXT]||(menuMode&&held[BACK]));
  button(SDL_CONTROLLER_BUTTON_Y,!menuMode&&held[PREV]);
+ button(SDL_CONTROLLER_BUTTON_LEFTSTICK,!menuMode&&held[CROUCH]);
  button(SDL_CONTROLLER_BUTTON_RIGHTSHOULDER,0);
  button(SDL_CONTROLLER_BUTTON_LEFTSHOULDER,0);
  button(SDL_CONTROLLER_BUTTON_START,held[MENU]);
@@ -81,8 +136,11 @@ static void look(struct Finger*f,float dx,float dy) {
 }
 int QVR_TouchEvent(const SDL_Event *e,int menu) {
  if(menuMode!=menu){QVR_TouchReset();menuMode=menu;}
- if(e->type==SDL_APP_WILLENTERBACKGROUND || (e->type==SDL_WINDOWEVENT&&e->window.event==SDL_WINDOWEVENT_FOCUS_LOST)){QVR_TouchReset();return 0;}
+ if(e->type==SDL_APP_DIDENTERFOREGROUND||(e->type==SDL_WINDOWEVENT&&e->window.event==SDL_WINDOWEVENT_FOCUS_GAINED)){gyroBackground=0;gyroStreaming();}
+ if(e->type==SDL_APP_WILLENTERBACKGROUND || (e->type==SDL_WINDOWEVENT&&e->window.event==SDL_WINDOWEVENT_FOCUS_LOST)){gyroBackground=1;gyroStreaming();if(editing)cancelEdit();QVR_TouchReset();return 0;}
  if(e->type!=SDL_FINGERDOWN&&e->type!=SDL_FINGERMOTION&&e->type!=SDL_FINGERUP)return 0;
+ if(editing){editEvent(e);return 1;}
+ if(menuMode&&e->type==SDL_FINGERDOWN&&hit(e->tfinger.x,e->tfinger.y,.50f,.1f,.065f)){beginEdit();return 1;}
  int i;for(i=0;i<NF;i++)if(fingers[i].used&&fingers[i].id==e->tfinger.fingerId)break;
  if(e->type==SDL_FINGERDOWN){
   if(i==NF)for(i=0;i<NF;i++)if(!fingers[i].used)break;
@@ -91,10 +149,10 @@ int QVR_TouchEvent(const SDL_Event *e,int menu) {
   f->x=f->ox=e->tfinger.x;f->y=f->oy=e->tfinger.y;f->role=LOOK;
   for(unsigned b=0;b<sizeof buttons/sizeof buttons[0];b++){
    if(buttons[b].role==BACK&&!menuMode)continue;
-   float dx=(f->x-buttons[b].x)*aspect,dy=f->y-buttons[b].y;
-   if(dx*dx+dy*dy<.075f*.075f){f->role=buttons[b].role;break;}
+   if(hit(f->x,f->y,buttons[b].x,buttons[b].y,itemRadius(b))){f->role=buttons[b].role;break;}
   }
-  if(f->role==LOOK&&f->x<.45f){int moving=0;for(int j=0;j<NF;j++)if(j!=i&&fingers[j].used&&fingers[j].role==MOVE)moving=1;if(!moving)f->role=MOVE;}
+  if(f->role==MOVE||(f->role==LOOK&&f->x<.45f)){int moving=0;for(int j=0;j<NF;j++)if(j!=i&&fingers[j].used&&fingers[j].role==MOVE)moving=1;f->role=moving?LOOK:MOVE;}
+  if(f->role==GYRO&&gyroIndex>=0){gyroEnabled=!gyroEnabled;gyroStreaming();}
  }else if(i<NF){
   struct Finger*f=&fingers[i];
   if(e->type==SDL_FINGERUP)f->used=0;
@@ -135,21 +193,39 @@ static void glyph(SDL_Renderer*r,int role,float x,float y,float s){
   /* Three cartridges plus a clear cycling chevron. */
   for(int i=0;i<3;i++){float a=-.8f+i*.4f;bar(r,x,y,a,-.55f,.23f,.7f,s);stroke(r,x,y,a,-.55f,a+.115f,-.75f,s);stroke(r,x,y,a+.115f,-.75f,a+.23f,-.55f,s);}
   float v=role==NEXT?1:-1;stroke(r,x,y,-.7f*v,.55f,.7f*v,.55f,s);stroke(r,x,y,.7f*v,.55f,.35f*v,.25f,s);stroke(r,x,y,.7f*v,.55f,.35f*v,.85f,s);
+ }else if(role==CROUCH){circle(r,x+s*.22f,y-s*.65f,s*.18f);stroke(r,x,y,.1f,-.4f,-.35f,.1f,s);stroke(r,x,y,-.35f,.1f,.35f,.2f,s);stroke(r,x,y,.35f,.2f,-.15f,.8f,s);stroke(r,x,y,-.15f,.8f,.7f,.8f,s);stroke(r,x,y,-.08f,-.13f,.7f,-.03f,s);
+ }else if(role==GYRO){circle(r,x,y,s*.7f);stroke(r,x,y,-1,0,1,0,s);stroke(r,x,y,0,-1,0,1,s);circle(r,x,y,s*.22f);
  }else if(role==BACK){stroke(r,x,y,.8f,0,-.8f,0,s);stroke(r,x,y,-.8f,0,-.15f,-.65f,s);stroke(r,x,y,-.8f,0,-.15f,.65f,s);
  }else if(role==MENU){for(int k=-1;k<=1;k++)bar(r,x,y,-.8f,k*.55f-.09f,1.6f,.18f,s);}
 }
+static void editorIcon(SDL_Renderer*r,int action,float x,float y,float s){
+ if(action==0){stroke(r,x,y,-.6f,-.6f,.6f,.6f,s);stroke(r,x,y,-.6f,.6f,.6f,-.6f,s);}
+ if(action==1){circle(r,x,y,s*.65f);stroke(r,x,y,-.65f,-.05f,-.9f,-.55f,s);stroke(r,x,y,-.9f,-.55f,-.25f,-.4f,s);}
+ if(action==2){stroke(r,x,y,-.75f,0,-.2f,.6f,s);stroke(r,x,y,-.2f,.6f,.8f,-.6f,s);}
+ if(action==3){circle(r,x,y,s*.55f);for(int k=0;k<8;k++){float a=k*.785398f;stroke(r,x,y,cosf(a)*.55f,sinf(a)*.55f,cosf(a)*.9f,sinf(a)*.9f,s);}}
+}
 void QVR_TouchDraw(SDL_Renderer*r,int w,int h) {
  aspect=(float)w/h;SDL_SetRenderDrawBlendMode(r,SDL_BLENDMODE_BLEND);
- for(unsigned i=0;i<sizeof buttons/sizeof buttons[0];i++){
-  int role=buttons[i].role;if(role==BACK&&!menuMode)continue;
-  float x=buttons[i].x*w,y=buttons[i].y*h,s=h*(role==FIRE?.049f:.039f);int held=0;
+ for(int i=0;i<NB;i++){
+  int role=buttons[i].role;if(role==MOVE)continue;if(role==BACK&&!menuMode&&!editing)continue;
+  float x=buttons[i].x*w,y=buttons[i].y*h,s=h*(role==FIRE?.049f:.033f)*buttons[i].scale;int held=0;
   for(int j=0;j<NF;j++)if(fingers[j].used&&fingers[j].role==role)held=1;
+  if(role==GYRO)held=gyroEnabled;
   SDL_SetRenderDrawColor(r,8,12,16,180);glyph(r,role,x+h*.003f,y+h*.004f,s*1.06f);
-  SDL_SetRenderDrawColor(r,held?255:238,held?198:243,held?100:248,held?255:215);glyph(r,role,x,y,s);
+  SDL_SetRenderDrawColor(r,held?255:238,held?198:243,held?100:248,role==GYRO&&gyroIndex<0?65:held?255:215);glyph(r,role,x,y,s);
  }
- /* Visible at rest, floating to the finger while moving. */
- float ox=.15f*w,oy=.76f*h,tx=ox,ty=oy;int moving=0;
+ /* Inventory silhouette is decorative; previous/next remain distinct buttons. */
+ float px=.84f,py=.49f,nx=.95f,ny=.49f;for(int i=0;i<NB;i++){if(buttons[i].role==PREV){px=buttons[i].x;py=buttons[i].y;}if(buttons[i].role==NEXT){nx=buttons[i].x;ny=buttons[i].y;}}
+ SDL_SetRenderDrawColor(r,225,230,235,135);glyph(r,FIRE,(px+nx)*.5f*w,(py+ny)*.5f*h,h*.028f);
+ float ox=.15f*w,oy=.76f*h,radius=.15f;
+ for(int b=0;b<NB;b++)if(buttons[b].role==MOVE){ox=buttons[b].x*w;oy=buttons[b].y*h;radius=itemRadius(b);}
+ float tx=ox,ty=oy;int moving=0;
  for(int i=0;i<NF;i++)if(fingers[i].used&&fingers[i].role==MOVE){struct Finger*f=&fingers[i];ox=f->ox*w;oy=f->oy*h;tx=f->x*w;ty=f->y*h;moving=1;break;}
- SDL_SetRenderDrawColor(r,12,18,25,moving?115:55);circle(r,ox,oy,h*.108f);
- SDL_SetRenderDrawColor(r,235,242,249,moving?150:70);circle(r,ox,oy,h*.105f);circle(r,tx,ty,h*.04f);
+ SDL_SetRenderDrawColor(r,12,18,25,moving?115:55);circle(r,ox,oy,h*radius*.72f);
+ SDL_SetRenderDrawColor(r,235,242,249,moving?150:70);circle(r,ox,oy,h*radius*.70f);circle(r,tx,ty,h*radius*.27f);
+ if(editing){
+  for(int i=0;i<NB;i++){SDL_SetRenderDrawColor(r,selected==i?255:120,selected==i?196:170,selected==i?80:210,160);circle(r,buttons[i].x*w,buttons[i].y*h,itemRadius(i)*h);}
+  if(selected>=0){float rad=itemRadius(selected);SDL_FRect handle={(buttons[selected].x+rad/aspect)*w-h*.018f,(buttons[selected].y+rad)*h-h*.018f,h*.036f,h*.036f};SDL_RenderFillRectF(r,&handle);}
+  for(int k=0;k<3;k++){SDL_SetRenderDrawColor(r,saveFailed&&k==2?255:245,saveFailed&&k==2?80:245,saveFailed&&k==2?80:245,255);editorIcon(r,k,(.42f+.08f*k)*w,.1f*h,h*.033f);}
+ }else if(menuMode){SDL_SetRenderDrawColor(r,240,245,250,230);editorIcon(r,3,.5f*w,.1f*h,h*.033f);}
 }

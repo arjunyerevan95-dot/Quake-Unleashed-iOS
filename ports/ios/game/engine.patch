@@ -177,7 +177,7 @@ index 162abe4..99df1fe 100644
  // allow mice or other external controllers to add commands
  	IN_Commands ();
 diff --git a/Quake/in_sdl.c b/Quake/in_sdl.c
-index 83bbe65..0f3f644 100644
+index 83bbe65..6d28ae5 100644
 --- a/Quake/in_sdl.c
 +++ b/Quake/in_sdl.c
 @@ -25,6 +25,9 @@ https://github.com/yquake2/yquake2/blob/master/src/client/input/sdl.c
@@ -218,13 +218,39 @@ index 83bbe65..0f3f644 100644
  	IN_UseController (device_index);
  }
  
-@@ -1694,6 +1700,18 @@ void IN_SendKeyEvents (void)
+@@ -1240,6 +1246,24 @@ static float IN_RecenterEasing (float frac)
+ void IN_GyroMove(usercmd_t *cmd)
+ {
+ 	float scale, duration, lerp_frac;
++#ifdef QVR_IOS
++    float phone[3];
++    extern float QVR_IOSLandscapeSign(void);
++    if(QVR_TouchEditing())return;
++    if(QVR_TouchGyro(phone)) {
++        float orientation=QVR_IOSLandscapeSign();
++        if(!orientation || cl.paused || key_dest!=key_game || CL_InCutscene())return;
++        float dt=q_min(host_rawframetime,0.05);
++        float yaw=phone[0]*orientation, pitch=phone[1]*orientation;
++        scale=(180.f/M_PI)*dt*IN_FovScale();
++        float right=-scale*yaw*gyro_yawsensitivity.value;
++        float down=-scale*pitch*gyro_pitchsensitivity.value;
++        VR_FlatLookTurn(&right,&down);
++        cl.viewangles[YAW]-=right;cl.viewangles[PITCH]+=down;
++        V_StopPitchDrift();
++        return;
++    }
++#endif
+ 	if (!gyro_enable.value)
+ 		return;
+ 
+@@ -1694,6 +1718,19 @@ void IN_SendKeyEvents (void)
  
  	while (SDL_PollEvent(&event))
  	{
 +		#ifdef QVR_IOS
 +		if (QVR_TouchEvent(&event, key_dest != key_game)) {
 +            int touch_device=QVR_TouchDeviceIndex();
++            if(!keybindings[K_LTHUMB] || !*keybindings[K_LTHUMB] || !strcmp(keybindings[K_LTHUMB],"+speed"))Key_SetBinding(K_LTHUMB,"+flatcrouch");
 +            /* Saved legacy configs can unbind native controls; fill gaps only, never overwrite custom binds. */
 +            if(!keybindings[K_RTRIGGER] || !*keybindings[K_RTRIGGER])Key_SetBinding(K_RTRIGGER,"+attack");
 +            if(!keybindings[K_ABUTTON] || !*keybindings[K_ABUTTON])Key_SetBinding(K_ABUTTON,"+jump");
@@ -237,7 +263,7 @@ index 83bbe65..0f3f644 100644
  		if (VR_ImGuiEvent (&event, (event.type == SDL_KEYDOWN || event.type == SDL_KEYUP) ? IN_SDL2_ScancodeToQuakeKey (event.key.keysym.scancode) : -1)) // QVR: a flat-screen tool's ImGui took it (the Rig Studio: vr/vr_imgui.cpp); the key, so a key bound to a tool's toggle still reaches its binding
  			continue;
  		switch (event.type)
-@@ -1714,8 +1732,12 @@ void IN_SendKeyEvents (void)
+@@ -1714,8 +1751,12 @@ void IN_SendKeyEvents (void)
  			}
  			else if (event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED)
  			{
