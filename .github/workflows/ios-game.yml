@@ -35,8 +35,11 @@ jobs:
           python3 ports/ios/probe/extract_inputs.py "$RUNNER_TEMP/native-donor.ipa" "$RUNNER_TEMP/native-inputs"
       - name: Focused native touch controller fixture
         run: |
-          brew list sdl2 >/dev/null 2>&1 || brew install sdl2
-          cc ports/ios/game/test_touch_overlay.c $(sdl2-config --cflags --libs) -lm -o "$RUNNER_TEMP/touch-fixture"
+          # Test the same pinned SDL2 as the app, not Homebrew SDL2-on-SDL3 compatibility.
+          cmake -S SDL -B "$RUNNER_TEMP/host-sdl" -DCMAKE_BUILD_TYPE=Release -DSDL_SHARED=ON -DSDL_STATIC=OFF -DSDL_TEST=OFF -DCMAKE_INSTALL_PREFIX="$RUNNER_TEMP/host-sdl-install"
+          cmake --build "$RUNNER_TEMP/host-sdl" --parallel 3
+          cmake --install "$RUNNER_TEMP/host-sdl"
+          cc ports/ios/game/test_touch_overlay.c $("$RUNNER_TEMP/host-sdl-install/bin/sdl2-config" --cflags --libs) -lm -o "$RUNNER_TEMP/touch-fixture"
           SDL_VIDEODRIVER=dummy "$RUNNER_TEMP/touch-fixture"
       - name: Compile real engine without retail data
         run: bash ports/ios/game/build_game.sh "$GITHUB_WORKSPACE/engine" "$GITHUB_WORKSPACE/SDL" "$RUNNER_TEMP/native-inputs" "$RUNNER_TEMP/game-output"
