@@ -60,12 +60,18 @@ SDL_GLContext QVR_GL_CreateContext(SDL_Window*w){
  fail:QVR_GL_DeleteContext(ctx);return NULL;
 }
 void QVR_GL_SwapWindow(SDL_Window*w){
+ static unsigned presents;
  (void)w;if(!ctx||!texture)return;
+ if(presents<3)fprintf(stderr,"UNLEASHED present %u: readback begin\n",presents);
  void(*read)(int,int,int,int,unsigned,unsigned,void*)=get_proc("glReadPixels");
  if(!read)return;
  read(0,0,width,height,0x1908,0x1401,pixels);
- SDL_UpdateTexture(texture,NULL,pixels,width*4);SDL_RenderClear(renderer);
- SDL_RenderCopyEx(renderer,texture,NULL,NULL,0,NULL,SDL_FLIP_VERTICAL);SDL_RenderPresent(renderer);
+ if(SDL_UpdateTexture(texture,NULL,pixels,width*4)!=0 || SDL_RenderClear(renderer)!=0 ||
+    SDL_RenderCopyEx(renderer,texture,NULL,NULL,0,NULL,SDL_FLIP_VERTICAL)!=0){
+   if(presents<3)fprintf(stderr,"UNLEASHED present failed: %s\n",SDL_GetError());
+ }else{SDL_RenderPresent(renderer);}
+ if(presents<3)fprintf(stderr,"UNLEASHED present %u: returned\n",presents);
+ ++presents;
 }
 
 #ifdef QVR_IOS

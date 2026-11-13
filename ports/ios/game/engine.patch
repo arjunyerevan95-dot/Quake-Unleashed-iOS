@@ -1,5 +1,5 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 643a56c..645c9cf 100644
+index 643a56c52..645c9cfbe 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -8,13 +8,28 @@ if (WIN32)
@@ -58,7 +58,7 @@ index 643a56c..645c9cf 100644
  else()
  	target_link_libraries(ironwail PRIVATE OpenGL::GL)
 diff --git a/Quake/gl_vidsdl.c b/Quake/gl_vidsdl.c
-index b82a8d5..856e0d3 100644
+index b82a8d56e..856e0d37c 100644
 --- a/Quake/gl_vidsdl.c
 +++ b/Quake/gl_vidsdl.c
 @@ -36,7 +36,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
@@ -80,7 +80,7 @@ index b82a8d5..856e0d3 100644
  	// https://developer.apple.com/library/mac/technotes/tn2085/
  	if (host_parms->numcpus > 1 &&
 diff --git a/Quake/in_sdl.c b/Quake/in_sdl.c
-index 83bbe65..a9cdc77 100644
+index 83bbe6506..a9cdc77e8 100644
 --- a/Quake/in_sdl.c
 +++ b/Quake/in_sdl.c
 @@ -41,7 +41,7 @@ static keydevice_t lastactivetype = KD_NONE;
@@ -102,10 +102,10 @@ index 83bbe65..a9cdc77 100644
  		// Work around https://github.com/sezero/quakespasm/issues/48
  		int width, height;
 diff --git a/Quake/main_sdl.c b/Quake/main_sdl.c
-index d2670b6..938b013 100644
+index d2670b6e8..dc794aaeb 100644
 --- a/Quake/main_sdl.c
 +++ b/Quake/main_sdl.c
-@@ -120,7 +120,20 @@ static double Sys_Throttle (double oldtime)
+@@ -120,7 +120,24 @@ static double Sys_Throttle (double oldtime)
  
  #define DEFAULT_MEMORY (384 * 1024 * 1024) // ericw -- was 72MB (64-bit) / 64MB (32-bit)
  
@@ -119,15 +119,19 @@ index d2670b6..938b013 100644
 +{
 +    (void)unused;
 +    double now = Sys_DoubleTime();
++    static unsigned ios_frames;
 +    scr_skipupdate = VID_IsMinimized();
++    if (ios_frames < 3) Sys_Printf("iOS frame %u enter (skip=%d)\n", ios_frames, scr_skipupdate);
 +    Host_Frame(now - ios_oldtime);
++    if (ios_frames < 3) Sys_Printf("iOS frame %u returned\n", ios_frames);
++    ++ios_frames;
 +    ios_oldtime = now;
 +}
 +#endif
  
  // On OS X we call SDL_main from the launcher, but SDL2 doesn't redefine main
  // as SDL_main on OS X anymore, so we do it ourselves.
-@@ -133,7 +146,10 @@ int main(int argc, char *argv[])
+@@ -133,7 +150,10 @@ int main(int argc, char *argv[])
  	int		t;
  	double		time, oldtime, newtime;
  
@@ -139,7 +143,7 @@ index d2670b6..938b013 100644
  	parms.basedir = ".";
  
  	parms.argc = argc;
-@@ -173,7 +189,13 @@ int main(int argc, char *argv[])
+@@ -173,7 +193,13 @@ int main(int argc, char *argv[])
  	Host_Init();
  
  	oldtime = Sys_DoubleTime();
@@ -155,7 +159,7 @@ index d2670b6..938b013 100644
  		while (1)
  		{
 diff --git a/Quake/sys_sdl_unix.c b/Quake/sys_sdl_unix.c
-index 0319c05..c0384d7 100644
+index 0319c0537..c0384d783 100644
 --- a/Quake/sys_sdl_unix.c
 +++ b/Quake/sys_sdl_unix.c
 @@ -514,6 +514,10 @@ qboolean Sys_GetAltUserPrefDir (qboolean remastered, char *dst, size_t dstsize)
@@ -178,7 +182,7 @@ index 0319c05..c0384d7 100644
  
  qboolean Sys_Explore (const char *path)
 diff --git a/Quake/vr/vr_ao.cpp b/Quake/vr/vr_ao.cpp
-index 7862a1e..d8d48ee 100644
+index 7862a1e9b..d8d48ee01 100644
 --- a/Quake/vr/vr_ao.cpp
 +++ b/Quake/vr/vr_ao.cpp
 @@ -53,7 +53,9 @@
@@ -237,7 +241,7 @@ index 7862a1e..d8d48ee 100644
  // One pose: for each vertex, the share of cosine-weighted rays over its hemisphere that the model's own triangles
  // stop within `reach` (a hit counts less the farther it is: 1 - t / reach). The same bytes as testing every triangle
 diff --git a/Quake/vr/vr_audio.cpp b/Quake/vr/vr_audio.cpp
-index 5061cc1..433663c 100644
+index 5061cc154..433663cef 100644
 --- a/Quake/vr/vr_audio.cpp
 +++ b/Quake/vr/vr_audio.cpp
 @@ -73,7 +73,9 @@
@@ -282,7 +286,7 @@ index 5061cc1..433663c 100644
      {
          // (symmetric: the kernel the same reversed; eight sums, for the compiler to keep in lanes)
 diff --git a/Quake/vr/vr_audio_internal.hpp b/Quake/vr/vr_audio_internal.hpp
-index 3edee4c..3924d38 100644
+index 3edee4c85..3924d3881 100644
 --- a/Quake/vr/vr_audio_internal.hpp
 +++ b/Quake/vr/vr_audio_internal.hpp
 @@ -41,7 +41,9 @@
@@ -297,7 +301,7 @@ index 3edee4c..3924d38 100644
  
  namespace qvr::audio::detail
 diff --git a/Quake/vr/vr_audio_io.cpp b/Quake/vr/vr_audio_io.cpp
-index 4cf6fd6..e128c15 100644
+index 4cf6fd6e9..e128c15cd 100644
 --- a/Quake/vr/vr_audio_io.cpp
 +++ b/Quake/vr/vr_audio_io.cpp
 @@ -268,6 +268,7 @@ float fullBandAt(const short* x, int length, int loop, double pos)
@@ -325,7 +329,7 @@ index 4cf6fd6..e128c15 100644
      // Past the end: the loop's start again (or silence); before the start: a loop from 0's end (or silence).
      const int loopLen = loop >= 0 && loop < length ? length - loop : 0;
 diff --git a/Quake/vr/vr_blender.cpp b/Quake/vr/vr_blender.cpp
-index 82c4861..a6b7b84 100644
+index 82c486132..a6b7b841c 100644
 --- a/Quake/vr/vr_blender.cpp
 +++ b/Quake/vr/vr_blender.cpp
 @@ -264,6 +264,9 @@ struct Edit
@@ -339,7 +343,7 @@ index 82c4861..a6b7b84 100644
      (void)dir;
      return system((cmd + " &").cStr()) == 0;
 diff --git a/Quake/vr/vr_crtheap_info.c b/Quake/vr/vr_crtheap_info.c
-index 0d1ad5f..dfd0b86 100644
+index 0d1ad5f1f..dfd0b8681 100644
 --- a/Quake/vr/vr_crtheap_info.c
 +++ b/Quake/vr/vr_crtheap_info.c
 @@ -206,6 +206,13 @@ void VR_CrtHeapSetPurgeDelay(long milliseconds)
@@ -357,7 +361,7 @@ index 0d1ad5f..dfd0b86 100644
  {
  }
 diff --git a/Quake/vr/vr_findradius.cpp b/Quake/vr/vr_findradius.cpp
-index 28ef36d..3ca2c8e 100644
+index 28ef36dc3..3ca2c8e3a 100644
 --- a/Quake/vr/vr_findradius.cpp
 +++ b/Quake/vr/vr_findradius.cpp
 @@ -31,11 +31,8 @@
@@ -410,8 +414,30 @@ index 28ef36d..3ca2c8e 100644
      return chain;
  }
  
+diff --git a/Quake/vr/vr_gfx_gl.cpp b/Quake/vr/vr_gfx_gl.cpp
+index e3c6304fd..46aa670af 100644
+--- a/Quake/vr/vr_gfx_gl.cpp
++++ b/Quake/vr/vr_gfx_gl.cpp
+@@ -592,7 +592,7 @@ layout(location = 15) uniform int Reverse;        // drawn in reverse order: the
+ #ifdef PARTICLE_TRIM
+ layout(location = 13) uniform vec4 TrimView; // actual target width, height, atlas width, height
+ layout(location = 14) uniform vec2 Trim; // enable, world block size (0 plain)
+-layout(location = 20) uniform vec4 Support[16]; // guarded base-level support in atlas UVs
++layout(location = 128) uniform vec4 Support[16]; // guarded base-level support in atlas UVs
+ #endif
+ layout(location = 12) uniform float LargePixels;  // large: half across at least this many of them
+ // Near the eye (vr_particle_near_fade, _near_cull): x fading from this far (units), y nothing nearer; z: none larger
+@@ -1813,7 +1813,7 @@ void drawParticlesWith(GLuint program, const ParticleBatch& batch, bool pull, bo
+         GL_Uniform4fFunc(13, static_cast<float>(width), static_cast<float>(height), particleAtlasSize.x, particleAtlasSize.y);
+         const float block = retro > 0 ? retro::particleTrimBlock(retro) : 0.f;
+         GL_Uniform2fFunc(14, block >= 0.f ? 1.f : 0.f, block);
+-        GL_Uniform4fvFunc(20, 16, &particleSupport[0][0]);
++        GL_Uniform4fvFunc(128, 16, &particleSupport[0][0]);
+     }
+     bool retroVariant = false; // (particleProgramFor's retro variants: PARTICLE_PLAIN's MinBlocks)
+     for(const auto& row : particleProgram)
 diff --git a/Quake/vr/vr_mapindex.cpp b/Quake/vr/vr_mapindex.cpp
-index 56f93fd..1799021 100644
+index 56f93fd2d..179902131 100644
 --- a/Quake/vr/vr_mapindex.cpp
 +++ b/Quake/vr/vr_mapindex.cpp
 @@ -516,8 +516,7 @@ bool loadCache(Index& idx, const za::String& url, bool anyAge)
@@ -434,7 +460,7 @@ index 56f93fd..1799021 100644
      if(!fetchIndex(built, url, status))
      {
 diff --git a/Quake/vr/vr_motion_child.cpp b/Quake/vr/vr_motion_child.cpp
-index 9a9ad77..d20e6fc 100644
+index 9a9ad774c..d20e6fcbb 100644
 --- a/Quake/vr/vr_motion_child.cpp
 +++ b/Quake/vr/vr_motion_child.cpp
 @@ -148,6 +148,9 @@ bool start(const za::Vector<za::String>& args, za::String& error)
@@ -448,7 +474,7 @@ index 9a9ad77..d20e6fc 100644
      if(pid > 0)
      {
 diff --git a/Quake/vr/vr_relight_process.cpp b/Quake/vr/vr_relight_process.cpp
-index 6324461..2ee0ddc 100644
+index 632446123..2ee0ddc29 100644
 --- a/Quake/vr/vr_relight_process.cpp
 +++ b/Quake/vr/vr_relight_process.cpp
 @@ -156,6 +156,9 @@ bool start(int slot, const za::String& exe, const za::Vector<za::String>& args,
