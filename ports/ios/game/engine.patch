@@ -74,6 +74,47 @@ index 3ead30a..031b5b3 100644
  	Cbuf_InsertText (f);
  	if (f != default_cfg) {
  		Hunk_FreeToLowMark (mark);
+diff --git a/Quake/gl_draw.c b/Quake/gl_draw.c
+index 2c8a1bd..e225738 100644
+--- a/Quake/gl_draw.c
++++ b/Quake/gl_draw.c
+@@ -1522,7 +1522,12 @@ void Draw_GetCanvasTransform (canvastype type, drawtransform_t *transform)
+ 			break;
+ 		}
+ 		// QVR: room for a fifth more each way round the 320x200 menu (the VR pages use it: menuui::menuHeight 240)
++#ifdef QVR_IOS
++        // Flat phone menus need the actual 240-high extended page, not VR panel padding.
++        s = q_min((float)vid.guiwidth / 420.0f, (float)vid.guiheight / 240.0f);
++#else
+ 		s = q_min((float)vid.guiwidth / 420.0f, (float)vid.guiheight / 320.0f);
++#endif
+ 		s = CLAMP (1.0f, scr_menuscale.value, s);
+ 		Draw_Transform (320, 200, s, CANVAS_ALIGN_CENTERX, CANVAS_ALIGN_CENTERY, transform);
+ 		break;
+diff --git a/Quake/gl_screen.c b/Quake/gl_screen.c
+index 4e616db..1bbaf35 100644
+--- a/Quake/gl_screen.c
++++ b/Quake/gl_screen.c
+@@ -82,6 +82,9 @@ float		scr_con_current;
+ float		scr_conlines;		// lines of console to display
+ 
+ //johnfitz -- new cvars
++#ifdef QVR_IOS
++cvar_t scr_ios_ui_version = {"scr_ios_ui_version", "0", CVAR_ARCHIVE};
++#endif
+ cvar_t		scr_menuscale = {"scr_menuscale", "1", CVAR_ARCHIVE};
+ cvar_t		scr_menubgalpha = {"scr_menubgalpha", "0.7", CVAR_ARCHIVE};
+ cvar_t		scr_menubgstyle = {"scr_menubgstyle", "-1", CVAR_ARCHIVE};
+@@ -681,6 +684,9 @@ SCR_Init
+ */
+ void SCR_Init (void)
+ {
++#ifdef QVR_IOS
++	Cvar_RegisterVariable (&scr_ios_ui_version);
++#endif
+ 	//johnfitz -- new cvars
+ 	Cvar_RegisterVariable (&scr_menuscale);
+ 	Cvar_RegisterVariable (&scr_menubgalpha);
 diff --git a/Quake/gl_vidsdl.c b/Quake/gl_vidsdl.c
 index b82a8d5..89fa371 100644
 --- a/Quake/gl_vidsdl.c
@@ -549,14 +590,20 @@ index e3c6304..46aa670 100644
      bool retroVariant = false; // (particleProgramFor's retro variants: PARTICLE_PLAIN's MinBlocks)
      for(const auto& row : particleProgram)
 diff --git a/Quake/vr/vr_main.cpp b/Quake/vr/vr_main.cpp
-index 13767ef..8b7005f 100644
+index 13767ef..4068264 100644
 --- a/Quake/vr/vr_main.cpp
 +++ b/Quake/vr/vr_main.cpp
-@@ -374,6 +374,10 @@ void VR_Restart_f()
+@@ -374,6 +374,16 @@ void VR_Restart_f()
  // demo started from the command line runs instead of any.
  void startGameCommands()
  {
 +#ifdef QVR_IOS
++    // One-time phone migration after saved config execution. Preserve non-default custom scales.
++    if(Cvar_VariableValue("scr_ios_ui_version") < 1.f){
++        const char* scales[]={"scr_menuscale","scr_sbarscale","scr_conscale"};
++        for(const char* name:scales) if(Cvar_VariableValue(name)==1.f) Cvar_Set(name,"2");
++        Cvar_Set("scr_ios_ui_version","1");
++    }
 +    // On a phone, open the actual menu instead of an attract demo mistaken for gameplay.
 +    if(!sv.active && !cls.demoplayback && cls.state != ca_connected){Cbuf_InsertText("menu_main\n");return;}
 +#endif

@@ -46,6 +46,8 @@ jobs:
           name: Touch-glyph-preview
           path: ${{ runner.temp }}/touch-preview.bmp
           if-no-files-found: error
+      - name: Focused phone UI migration
+        run: python3 ports/ios/game/test_ui_migration.py "$GITHUB_WORKSPACE/engine"
       - name: Compile real engine without retail data
         run: bash ports/ios/game/build_game.sh "$GITHUB_WORKSPACE/engine" "$GITHUB_WORKSPACE/SDL" "$RUNNER_TEMP/native-inputs" "$RUNNER_TEMP/game-output"
       - uses: actions/upload-artifact@v4
