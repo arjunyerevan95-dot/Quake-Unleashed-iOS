@@ -1,6 +1,23 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
  * Private retail data stays in Documents/id1, never in the application bundle. */
 #import <Foundation/Foundation.h>
+#import <UIKit/UIKit.h>
+#include "SDL_syswm.h"
+static SDL_Window *orientationWindow;
+void QVR_IOSRequestLandscape(SDL_Window *window) {
+ orientationWindow=window;
+ SDL_SysWMinfo info;SDL_VERSION(&info.version);
+ if(!window||!SDL_GetWindowWMInfo(window,&info))return;
+ UIWindow *ui=info.info.uikit.window;
+ [ui.rootViewController setNeedsUpdateOfSupportedInterfaceOrientations];
+ if(ui.windowScene.activationState==UISceneActivationStateForegroundActive){
+   UIWindowSceneGeometryPreferencesIOS *preferences=[[UIWindowSceneGeometryPreferencesIOS alloc] initWithInterfaceOrientations:UIInterfaceOrientationMaskLandscape];
+   [ui.windowScene requestGeometryUpdateWithPreferences:preferences errorHandler:^(NSError *error){fprintf(stderr,"UNLEASHED landscape request: %s\n",error.localizedDescription.UTF8String);}];
+ }
+}
+extern void QVR_IOSSuspend(void);
+extern void QVR_IOSResume(void);
+int QVR_IOSApplicationActive(void) { return UIApplication.sharedApplication.applicationState == UIApplicationStateActive; }
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -9,6 +26,9 @@
 void QVR_IOSBootstrap(int *argc, char ***argv)
 {
     @autoreleasepool {
+        SDL_SetHint(SDL_HINT_ORIENTATIONS,"LandscapeLeft LandscapeRight");
+        [[NSNotificationCenter defaultCenter] addObserverForName:UIApplicationWillResignActiveNotification object:nil queue:nil usingBlock:^(NSNotification *note){ (void)note; QVR_IOSSuspend(); }];
+        [[NSNotificationCenter defaultCenter] addObserverForName:UIApplicationDidBecomeActiveNotification object:nil queue:nil usingBlock:^(NSNotification *note){ (void)note; QVR_IOSResume(); QVR_IOSRequestLandscape(orientationWindow); }];
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         NSString *frameworks = NSBundle.mainBundle.privateFrameworksPath;

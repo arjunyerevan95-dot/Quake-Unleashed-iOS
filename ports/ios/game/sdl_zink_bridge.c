@@ -16,6 +16,20 @@ static SDL_Renderer *renderer;
 static SDL_Window *game_window;
 static SDL_Texture *texture;
 static unsigned char *pixels;
+extern int QVR_IOSApplicationActive(void);
+extern void QVR_IOSRequestLandscape(SDL_Window *);
+static int suspended;
+void QVR_IOSSuspend(void){
+ suspended=1;QVR_TouchReset();
+ /* Drain submitted work while WillResignActive still permits GPU execution. */
+ if(ctx&&get_proc){void(*finish)(void)=get_proc("glFinish");if(finish)finish();}
+ fprintf(stderr,"UNLEASHED lifecycle suspended\n");
+}
+void QVR_IOSResume(void){suspended=0;QVR_TouchReset();fprintf(stderr,"UNLEASHED lifecycle resumed\n");}
+int QVR_IOSCanRender(void){
+ int w=0,h=0;if(game_window)SDL_GetWindowSize(game_window,&w,&h);
+ return !suspended && QVR_IOSApplicationActive() && w>=h && h>0;
+}
 static int width=640,height=360,attrs[64],interval=1;
 SDL_Window *QVR_CreateWindow(const char*t,int x,int y,int w,int h,Uint32 flags){
  (void)w;(void)h;
@@ -34,6 +48,7 @@ SDL_Window *QVR_CreateWindow(const char*t,int x,int y,int w,int h,Uint32 flags){
    fprintf(stderr,"UNLEASHED touch init failed: %s\n",SDL_GetError());
    SDL_DestroyWindow(game_window);game_window=NULL;
  }
+ if(game_window)QVR_IOSRequestLandscape(game_window);
  return game_window;
 }
 int QVR_GL_SetAttribute(SDL_GLattr a,int value){if((unsigned)a<64)attrs[a]=value;return 0;}
@@ -80,7 +95,7 @@ SDL_GLContext QVR_GL_CreateContext(SDL_Window*w){
 }
 void QVR_GL_SwapWindow(SDL_Window*w){
  static unsigned presents;
- (void)w;if(!ctx||!texture)return;
+ (void)w;if(!ctx||!texture||!QVR_IOSCanRender())return;
  if(presents<3)fprintf(stderr,"UNLEASHED present %u: readback begin\n",presents);
  void(*read)(int,int,int,int,unsigned,unsigned,void*)=get_proc("glReadPixels");
  if(!read)return;

@@ -13,6 +13,9 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+int QVR_IOSCanRender(void);
+void QVR_IOSSuspend(void);
+void QVR_IOSResume(void);
 SDL_Window *QVR_CreateWindow(const char*,int,int,int,int,Uint32);
 SDL_GLContext QVR_GL_CreateContext(SDL_Window*);
 void QVR_GL_DeleteContext(SDL_GLContext);

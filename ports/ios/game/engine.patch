@@ -120,8 +120,23 @@ index b82a8d5..89fa371 100644
  	// ericw -- enable multi-threaded OpenGL, gives a decent FPS boost.
  	// https://developer.apple.com/library/mac/technotes/tn2085/
  	if (host_parms->numcpus > 1 &&
+diff --git a/Quake/host.c b/Quake/host.c
+index 162abe4..99df1fe 100644
+--- a/Quake/host.c
++++ b/Quake/host.c
+@@ -1645,6 +1645,10 @@ void _Host_Frame (double time)
+ 	Key_UpdateForDest ();
+ 	IN_UpdateInputMode ();
+ 	Sys_SendKeyEvents ();
++#ifdef QVR_IOS
++	/* UIKit may resign active during its event pump: do not issue any more GPU work. */
++	if (!QVR_IOSCanRender()) return;
++#endif
+ 
+ // allow mice or other external controllers to add commands
+ 	IN_Commands ();
 diff --git a/Quake/in_sdl.c b/Quake/in_sdl.c
-index 83bbe65..c7fab86 100644
+index 83bbe65..5b68326 100644
 --- a/Quake/in_sdl.c
 +++ b/Quake/in_sdl.c
 @@ -25,6 +25,9 @@ https://github.com/yquake2/yquake2/blob/master/src/client/input/sdl.c
@@ -152,17 +167,31 @@ index 83bbe65..c7fab86 100644
  	{
  		// Work around https://github.com/sezero/quakespasm/issues/48
  		int width, height;
-@@ -1694,6 +1697,9 @@ void IN_SendKeyEvents (void)
+@@ -450,6 +453,9 @@ static void IN_SetupJoystick (void)
+ {
+ 	int	count = SDL_NumJoysticks ();
+ 	int	device_index = CLAMP (-1, (int)joy_device.value, count - 1);
++	#ifdef QVR_IOS
++	if((device_index<0 || !SDL_IsGameController(device_index)) && QVR_TouchDeviceIndex()>=0)device_index=QVR_TouchDeviceIndex();
++	#endif
+ 	IN_UseController (device_index);
+ }
+ 
+@@ -1694,6 +1700,13 @@ void IN_SendKeyEvents (void)
  
  	while (SDL_PollEvent(&event))
  	{
 +		#ifdef QVR_IOS
-+		if (QVR_TouchEvent(&event, key_dest != key_game)) continue;
++		if (QVR_TouchEvent(&event, key_dest != key_game)) {
++            int touch_device=QVR_TouchDeviceIndex();
++            if(touch_device>=0 && joy_active_device!=touch_device)IN_UseController(touch_device);
++            IN_Commands(); continue;
++        }
 +		#endif
  		if (VR_ImGuiEvent (&event, (event.type == SDL_KEYDOWN || event.type == SDL_KEYUP) ? IN_SDL2_ScancodeToQuakeKey (event.key.keysym.scancode) : -1)) // QVR: a flat-screen tool's ImGui took it (the Rig Studio: vr/vr_imgui.cpp); the key, so a key bound to a tool's toggle still reaches its binding
  			continue;
  		switch (event.type)
-@@ -1714,8 +1720,12 @@ void IN_SendKeyEvents (void)
+@@ -1714,8 +1727,12 @@ void IN_SendKeyEvents (void)
  			}
  			else if (event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED)
  			{
@@ -176,10 +205,10 @@ index 83bbe65..c7fab86 100644
  			}
  			break;
 diff --git a/Quake/main_sdl.c b/Quake/main_sdl.c
-index d2670b6..dc794aa 100644
+index d2670b6..b35d40c 100644
 --- a/Quake/main_sdl.c
 +++ b/Quake/main_sdl.c
-@@ -120,7 +120,24 @@ static double Sys_Throttle (double oldtime)
+@@ -120,7 +120,28 @@ static double Sys_Throttle (double oldtime)
  
  #define DEFAULT_MEMORY (384 * 1024 * 1024) // ericw -- was 72MB (64-bit) / 64MB (32-bit)
  
@@ -191,21 +220,25 @@ index d2670b6..dc794aa 100644
 +static double ios_oldtime;
 +static void QVR_IOSFrame(void *unused)
 +{
-+    (void)unused;
-+    double now = Sys_DoubleTime();
++    static int in_frame;
 +    static unsigned ios_frames;
-+    scr_skipupdate = VID_IsMinimized();
-+    if (ios_frames < 3) Sys_Printf("iOS frame %u enter (skip=%d)\n", ios_frames, scr_skipupdate);
-+    Host_Frame(now - ios_oldtime);
-+    if (ios_frames < 3) Sys_Printf("iOS frame %u returned\n", ios_frames);
-+    ++ios_frames;
-+    ios_oldtime = now;
++    (void)unused;
++    if(in_frame)return; /* UIKit orientation/event pumping can re-enter its display link. */
++    in_frame=1;
++    SDL_PumpEvents();
++    double now=Sys_DoubleTime();
++    if(!QVR_IOSCanRender()){ios_oldtime=now;in_frame=0;return;}
++    scr_skipupdate=0;
++    if(ios_frames<3)Sys_Printf("iOS frame %u enter\n",ios_frames);
++    Host_Frame(q_min(now-ios_oldtime,0.05));
++    if(ios_frames<3)Sys_Printf("iOS frame %u returned\n",ios_frames);
++    ++ios_frames;ios_oldtime=now;in_frame=0;
 +}
 +#endif
  
  // On OS X we call SDL_main from the launcher, but SDL2 doesn't redefine main
  // as SDL_main on OS X anymore, so we do it ourselves.
-@@ -133,7 +150,10 @@ int main(int argc, char *argv[])
+@@ -133,7 +154,10 @@ int main(int argc, char *argv[])
  	int		t;
  	double		time, oldtime, newtime;
  
@@ -217,7 +250,7 @@ index d2670b6..dc794aa 100644
  	parms.basedir = ".";
  
  	parms.argc = argc;
-@@ -173,7 +193,13 @@ int main(int argc, char *argv[])
+@@ -173,7 +197,13 @@ int main(int argc, char *argv[])
  	Host_Init();
  
  	oldtime = Sys_DoubleTime();

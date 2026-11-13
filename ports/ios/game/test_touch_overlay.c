@@ -8,7 +8,16 @@ int main(void){
  SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS,"1");
  SDL_SetMainReady();assert(SDL_Init(SDL_INIT_VIDEO|SDL_INIT_GAMECONTROLLER)==0);
  SDL_Window*w=SDL_CreateWindow("test",0,0,960,480,SDL_WINDOW_HIDDEN);assert(w);
+ /* Reproduce the actual iPhone topology: non-controller device zero precedes
+  * the touch Xbox device. Engine selection must resolve the owned instance. */
+ int base=SDL_NumJoysticks();
+ int other=SDL_JoystickAttachVirtual(SDL_JOYSTICK_TYPE_UNKNOWN,2,2,0);assert(other==base);
+ assert(!SDL_IsGameController(other));
  assert(QVR_TouchInit(w)==0);assert(SDL_IsGameController(device));
+ assert(QVR_TouchDeviceIndex()==base+1);
+ assert(SDL_JoystickDetachVirtual(other)==0);
+ assert(QVR_TouchDeviceIndex()==base); /* hotplug reindex, same owned instance */
+ device=QVR_TouchDeviceIndex();
  SDL_GameController*c=SDL_GameControllerOpen(device);assert(c);
  assert(SDL_GameControllerGetType(c)==SDL_CONTROLLER_TYPE_XBOX360);
  finger(SDL_FINGERDOWN,1,.64f,.78f,0);assert(SDL_GameControllerGetAxis(c,SDL_CONTROLLER_AXIS_TRIGGERRIGHT)>30000);

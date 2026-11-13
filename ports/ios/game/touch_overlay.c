@@ -45,6 +45,14 @@ int QVR_TouchInit(SDL_Window *w) {
  fprintf(stderr,"UNLEASHED touch: enumerated SDL Xbox controller index=%d id=%d recognized=%d\n",device,(int)SDL_JoystickInstanceID(pad),SDL_IsGameController(device));
  return 0;
 }
+/* Device indices can move when another joystick is removed. Resolve our owned
+ * instance each time rather than assuming index zero or retaining a stale index. */
+int QVR_TouchDeviceIndex(void) {
+ if(!pad || !SDL_JoystickGetAttached(pad))return -1;
+ SDL_JoystickID id=SDL_JoystickInstanceID(pad);
+ for(int i=0;i<SDL_NumJoysticks();i++)if(SDL_JoystickGetDeviceInstanceID(i)==id)return i;
+ return -1;
+}
 static void state(void) {
  int held[8]={0};float mx=0,my=0;
  for(int i=0;i<NF;i++)if(fingers[i].used){
@@ -90,7 +98,17 @@ int QVR_TouchEvent(const SDL_Event *e,int menu) {
   if(e->type==SDL_FINGERUP)f->used=0;
   else {if(f->role==LOOK||f->role==FIRE)look(f,e->tfinger.x-f->x,e->tfinger.y-f->y);f->x=e->tfinger.x;f->y=e->tfinger.y;}
  }
- state();return 1;
+ state();
+ /* Bounded device evidence: distinguish UIKit delivery from controller sampling. */
+ static unsigned traced;
+ if(traced<12 && e->type!=SDL_FINGERMOTION){
+  ++traced;
+  fprintf(stderr,"UNLEASHED touch event=%u role=%d menu=%d pad=%d focus=%d rawRT=%d rawA=%d\n",
+   (unsigned)e->type,i<NF?fingers[i].role:-1,menuMode,pad!=NULL,
+   SDL_GetKeyboardFocus()==window,pad?SDL_JoystickGetAxis(pad,SDL_CONTROLLER_AXIS_TRIGGERRIGHT):0,
+   pad?SDL_JoystickGetButton(pad,SDL_CONTROLLER_BUTTON_A):0);
+ }
+ return 1;
 }
 static void circle(SDL_Renderer*r,float x,float y,float radius) {
  SDL_FPoint p[49];for(int i=0;i<=48;i++){float a=(float)i*6.2831853f/48;p[i].x=x+cosf(a)*radius;p[i].y=y+sinf(a)*radius;}SDL_RenderDrawLinesF(r,p,49);
