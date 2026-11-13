@@ -2,6 +2,7 @@
 #define QVR_BRIDGE_IMPL
 #endif
 #include "sdl_zink_bridge.h"
+#include "touch_overlay.h"
 #include <dlfcn.h>
 #include <stdlib.h>
 #include <string.h>
@@ -18,7 +19,22 @@ static unsigned char *pixels;
 static int width=640,height=360,attrs[64],interval=1;
 SDL_Window *QVR_CreateWindow(const char*t,int x,int y,int w,int h,Uint32 flags){
  (void)w;(void)h;
- return game_window=SDL_CreateWindow(t,x,y,width,height,(flags&~SDL_WINDOW_OPENGL)|SDL_WINDOW_ALLOW_HIGHDPI);
+ game_window=SDL_CreateWindow(t,x,y,width,height,(flags&~SDL_WINDOW_OPENGL)|SDL_WINDOW_ALLOW_HIGHDPI);
+ if(game_window){
+   int ww=0,hh=0;SDL_GetWindowSize(game_window,&ww,&hh);
+   if(ww>0&&hh>0){
+     /* Internal pixels follow the landscape aspect, not UIKit points or native retina pixels. */
+     int longside=ww>hh?ww:hh,shortside=ww>hh?hh:ww;
+     height=480;width=((height*longside/shortside)+1)&~1;
+     if(width>1280){height=((1280*shortside/longside)+1)&~1;width=1280;}
+   }
+   fprintf(stderr,"UNLEASHED window %dx%d points, offscreen %dx%d pixels\n",ww,hh,width,height);
+ }
+ if(game_window && QVR_TouchInit(game_window)!=0){
+   fprintf(stderr,"UNLEASHED touch init failed: %s\n",SDL_GetError());
+   SDL_DestroyWindow(game_window);game_window=NULL;
+ }
+ return game_window;
 }
 int QVR_GL_SetAttribute(SDL_GLattr a,int value){if((unsigned)a<64)attrs[a]=value;return 0;}
 int QVR_GL_GetAttribute(SDL_GLattr a,int*v){if(!v)return -1;*v=(unsigned)a<64?attrs[a]:0;return 0;}
@@ -52,8 +68,11 @@ SDL_GLContext QVR_GL_CreateContext(SDL_Window*w){
  if(!ctx||!pixels||!make_current(ctx,pixels,0x1401,width,height))goto fail;
  const unsigned char*(*str)(unsigned)=get_proc("glGetString");const char*r=str?(const char*)str(0x1F01):NULL;
  if(!r||(!strstr(r,"zink")&&!strstr(r,"Zink"))){SDL_SetError("Expected Zink renderer, got %s",r?r:"null");goto fail;}
+ SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY,"linear");
  SDL_SetHint(SDL_HINT_RENDER_DRIVER,"metal");renderer=SDL_CreateRenderer(w,-1,SDL_RENDERER_ACCELERATED|SDL_RENDERER_PRESENTVSYNC);
  if(!renderer)goto fail;
+ /* SDL letterboxes rather than stretching if drawable orientation/aspect changes. */
+ if(SDL_RenderSetLogicalSize(renderer,width,height)!=0)goto fail;
  texture=SDL_CreateTexture(renderer,SDL_PIXELFORMAT_RGBA32,SDL_TEXTUREACCESS_STREAMING,width,height);if(!texture)goto fail;
  attrs[SDL_GL_DEPTH_SIZE]=24;attrs[SDL_GL_STENCIL_SIZE]=8;
  fprintf(stderr,"UNLEASHED initial iOS bridge: %s, %dx%d CPU readback to Metal\n",r,width,height);return ctx;
@@ -66,10 +85,11 @@ void QVR_GL_SwapWindow(SDL_Window*w){
  void(*read)(int,int,int,int,unsigned,unsigned,void*)=get_proc("glReadPixels");
  if(!read)return;
  read(0,0,width,height,0x1908,0x1401,pixels);
+ SDL_SetRenderDrawColor(renderer,0,0,0,255);
  if(SDL_UpdateTexture(texture,NULL,pixels,width*4)!=0 || SDL_RenderClear(renderer)!=0 ||
     SDL_RenderCopyEx(renderer,texture,NULL,NULL,0,NULL,SDL_FLIP_VERTICAL)!=0){
    if(presents<3)fprintf(stderr,"UNLEASHED present failed: %s\n",SDL_GetError());
- }else{SDL_RenderPresent(renderer);}
+ }else{QVR_TouchDraw(renderer,width,height);SDL_RenderPresent(renderer);}
  if(presents<3)fprintf(stderr,"UNLEASHED present %u: returned\n",presents);
  ++presents;
 }

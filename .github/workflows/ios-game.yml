@@ -33,6 +33,11 @@ jobs:
         run: |
           curl --fail --location --retry 2 --max-time 180 https://github.com/thebcd69/bcd-games/releases/download/v0.1.653/BCD.ipa -o "$RUNNER_TEMP/native-donor.ipa"
           python3 ports/ios/probe/extract_inputs.py "$RUNNER_TEMP/native-donor.ipa" "$RUNNER_TEMP/native-inputs"
+      - name: Focused native touch controller fixture
+        run: |
+          brew list sdl2 >/dev/null 2>&1 || brew install sdl2
+          cc ports/ios/game/test_touch_overlay.c $(sdl2-config --cflags --libs) -lm -o "$RUNNER_TEMP/touch-fixture"
+          SDL_VIDEODRIVER=dummy "$RUNNER_TEMP/touch-fixture"
       - name: Compile real engine without retail data
         run: bash ports/ios/game/build_game.sh "$GITHUB_WORKSPACE/engine" "$GITHUB_WORKSPACE/SDL" "$RUNNER_TEMP/native-inputs" "$RUNNER_TEMP/game-output"
       - uses: actions/upload-artifact@v4

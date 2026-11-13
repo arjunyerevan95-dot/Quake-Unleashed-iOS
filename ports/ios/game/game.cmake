@@ -1,6 +1,6 @@
 # Initial native game target. Retail assets are deliberately not bundled.
 target_sources(ironwail PRIVATE
-    ports/ios/game/sdl_zink_bridge.c ports/ios/game/ios_bootstrap.m)
+    ports/ios/game/sdl_zink_bridge.c ports/ios/game/ios_bootstrap.m ports/ios/game/touch_overlay.c)
 target_compile_definitions(ironwail PRIVATE QVR_IOS WITHOUT_CURL)
 target_compile_options(ironwail PRIVATE
     -include ${CMAKE_CURRENT_SOURCE_DIR}/ports/ios/game/sdl_zink_bridge.h)

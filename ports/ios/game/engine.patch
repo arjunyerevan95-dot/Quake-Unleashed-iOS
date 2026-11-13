@@ -1,5 +1,5 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 643a56c52..645c9cfbe 100644
+index 643a56c..645c9cf 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -8,13 +8,28 @@ if (WIN32)
@@ -57,8 +57,25 @@ index 643a56c52..645c9cfbe 100644
  	target_link_libraries(ironwail PRIVATE OpenGL::OpenGL)
  else()
  	target_link_libraries(ironwail PRIVATE OpenGL::GL)
+diff --git a/Quake/cmd.c b/Quake/cmd.c
+index 3ead30a..031b5b3 100644
+--- a/Quake/cmd.c
++++ b/Quake/cmd.c
+@@ -549,6 +549,12 @@ exec:
+ 	}
+ 	else if (new_config)
+ 		Cbuf_InsertText ("\nvr_migrate_config new\n"); // QVR: Quake's own config.cfg (its binds) at a first start
++#ifdef QVR_IOS
++	/* Retail default.cfg predates gamepads. Seed native controller defaults AFTER it,
++	 * but BEFORE saved config.cfg, so user bindings remain authoritative. */
++	if (!strcmp(path, "default.cfg"))
++		Cbuf_InsertText("bind LTRIGGER +jump\nbind RTRIGGER +attack\nbind LSHOULDER \"impulse 12\"\nbind RSHOULDER \"impulse 10\"\n");
++#endif
+ 	Cbuf_InsertText (f);
+ 	if (f != default_cfg) {
+ 		Hunk_FreeToLowMark (mark);
 diff --git a/Quake/gl_vidsdl.c b/Quake/gl_vidsdl.c
-index b82a8d56e..856e0d37c 100644
+index b82a8d5..89fa371 100644
 --- a/Quake/gl_vidsdl.c
 +++ b/Quake/gl_vidsdl.c
 @@ -36,7 +36,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
@@ -70,7 +87,31 @@ index b82a8d56e..856e0d37c 100644
  #include <OpenGL/OpenGL.h>
  #endif
  
-@@ -1443,7 +1443,7 @@ static void GL_Init (void)
+@@ -309,7 +309,11 @@ VID_GetCurrentWidth
+ static int VID_GetCurrentWidth (void)
+ {
+ 	int w = 0, h = 0;
++	#ifdef QVR_IOS
++	SDL_GL_GetDrawableSize(draw_context, &w, &h);
++#else
+ 	SDL_GetWindowSize(draw_context, &w, &h);
++#endif
+ 	return w;
+ }
+ 
+@@ -321,7 +325,11 @@ VID_GetCurrentHeight
+ static int VID_GetCurrentHeight (void)
+ {
+ 	int w = 0, h = 0;
++	#ifdef QVR_IOS
++	SDL_GL_GetDrawableSize(draw_context, &w, &h);
++#else
+ 	SDL_GetWindowSize(draw_context, &w, &h);
++#endif
+ 	return h;
+ }
+ 
+@@ -1443,7 +1451,7 @@ static void GL_Init (void)
  	--ssbo_align;
  	--ubo_align;
  
@@ -80,10 +121,20 @@ index b82a8d56e..856e0d37c 100644
  	// https://developer.apple.com/library/mac/technotes/tn2085/
  	if (host_parms->numcpus > 1 &&
 diff --git a/Quake/in_sdl.c b/Quake/in_sdl.c
-index 83bbe6506..a9cdc77e8 100644
+index 83bbe65..c7fab86 100644
 --- a/Quake/in_sdl.c
 +++ b/Quake/in_sdl.c
-@@ -41,7 +41,7 @@ static keydevice_t lastactivetype = KD_NONE;
+@@ -25,6 +25,9 @@ https://github.com/yquake2/yquake2/blob/master/src/client/input/sdl.c
+ */
+ 
+ #include "quakedef.h"
++#ifdef QVR_IOS
++#include "../ports/ios/game/touch_overlay.h"
++#endif
+ #include "vr/vr_api.h"
+ #if defined(SDL_FRAMEWORK) || defined(NO_SDL_CONFIG)
+ #include <SDL2/SDL.h>
+@@ -41,7 +44,7 @@ static keydevice_t lastactivetype = KD_NONE;
  
  static cvar_t in_debugkeys = {"in_debugkeys", "0", CVAR_NONE};
  
@@ -92,7 +143,7 @@ index 83bbe6506..a9cdc77e8 100644
  /* Mouse acceleration needs to be disabled on OS X */
  #define MACOS_X_ACCELERATION_HACK
  #endif
-@@ -180,7 +180,7 @@ void IN_ShowCursor (void)
+@@ -180,7 +183,7 @@ void IN_ShowCursor (void)
  
  void IN_HideCursor (void)
  {
@@ -101,8 +152,31 @@ index 83bbe6506..a9cdc77e8 100644
  	{
  		// Work around https://github.com/sezero/quakespasm/issues/48
  		int width, height;
+@@ -1694,6 +1697,9 @@ void IN_SendKeyEvents (void)
+ 
+ 	while (SDL_PollEvent(&event))
+ 	{
++		#ifdef QVR_IOS
++		if (QVR_TouchEvent(&event, key_dest != key_game)) continue;
++		#endif
+ 		if (VR_ImGuiEvent (&event, (event.type == SDL_KEYDOWN || event.type == SDL_KEYUP) ? IN_SDL2_ScancodeToQuakeKey (event.key.keysym.scancode) : -1)) // QVR: a flat-screen tool's ImGui took it (the Rig Studio: vr/vr_imgui.cpp); the key, so a key bound to a tool's toggle still reaches its binding
+ 			continue;
+ 		switch (event.type)
+@@ -1714,8 +1720,12 @@ void IN_SendKeyEvents (void)
+ 			}
+ 			else if (event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED)
+ 			{
++				#ifdef QVR_IOS
++				SDL_GL_GetDrawableSize(SDL_GetWindowFromID(event.window.windowID), &vid.width, &vid.height);
++				#else
+ 				vid.width = event.window.data1;
+ 				vid.height = event.window.data2;
++				#endif
+ 				vid.resized = true;
+ 			}
+ 			break;
 diff --git a/Quake/main_sdl.c b/Quake/main_sdl.c
-index d2670b6e8..dc794aaeb 100644
+index d2670b6..dc794aa 100644
 --- a/Quake/main_sdl.c
 +++ b/Quake/main_sdl.c
 @@ -120,7 +120,24 @@ static double Sys_Throttle (double oldtime)
@@ -159,7 +233,7 @@ index d2670b6e8..dc794aaeb 100644
  		while (1)
  		{
 diff --git a/Quake/sys_sdl_unix.c b/Quake/sys_sdl_unix.c
-index 0319c0537..c0384d783 100644
+index 0319c05..c0384d7 100644
 --- a/Quake/sys_sdl_unix.c
 +++ b/Quake/sys_sdl_unix.c
 @@ -514,6 +514,10 @@ qboolean Sys_GetAltUserPrefDir (qboolean remastered, char *dst, size_t dstsize)
@@ -182,7 +256,7 @@ index 0319c0537..c0384d783 100644
  
  qboolean Sys_Explore (const char *path)
 diff --git a/Quake/vr/vr_ao.cpp b/Quake/vr/vr_ao.cpp
-index 7862a1e9b..d8d48ee01 100644
+index 7862a1e..d8d48ee 100644
 --- a/Quake/vr/vr_ao.cpp
 +++ b/Quake/vr/vr_ao.cpp
 @@ -53,7 +53,9 @@
@@ -241,7 +315,7 @@ index 7862a1e9b..d8d48ee01 100644
  // One pose: for each vertex, the share of cosine-weighted rays over its hemisphere that the model's own triangles
  // stop within `reach` (a hit counts less the farther it is: 1 - t / reach). The same bytes as testing every triangle
 diff --git a/Quake/vr/vr_audio.cpp b/Quake/vr/vr_audio.cpp
-index 5061cc154..433663cef 100644
+index 5061cc1..433663c 100644
 --- a/Quake/vr/vr_audio.cpp
 +++ b/Quake/vr/vr_audio.cpp
 @@ -73,7 +73,9 @@
@@ -286,7 +360,7 @@ index 5061cc154..433663cef 100644
      {
          // (symmetric: the kernel the same reversed; eight sums, for the compiler to keep in lanes)
 diff --git a/Quake/vr/vr_audio_internal.hpp b/Quake/vr/vr_audio_internal.hpp
-index 3edee4c85..3924d3881 100644
+index 3edee4c..3924d38 100644
 --- a/Quake/vr/vr_audio_internal.hpp
 +++ b/Quake/vr/vr_audio_internal.hpp
 @@ -41,7 +41,9 @@
@@ -301,7 +375,7 @@ index 3edee4c85..3924d3881 100644
  
  namespace qvr::audio::detail
 diff --git a/Quake/vr/vr_audio_io.cpp b/Quake/vr/vr_audio_io.cpp
-index 4cf6fd6e9..e128c15cd 100644
+index 4cf6fd6..e128c15 100644
 --- a/Quake/vr/vr_audio_io.cpp
 +++ b/Quake/vr/vr_audio_io.cpp
 @@ -268,6 +268,7 @@ float fullBandAt(const short* x, int length, int loop, double pos)
@@ -329,7 +403,7 @@ index 4cf6fd6e9..e128c15cd 100644
      // Past the end: the loop's start again (or silence); before the start: a loop from 0's end (or silence).
      const int loopLen = loop >= 0 && loop < length ? length - loop : 0;
 diff --git a/Quake/vr/vr_blender.cpp b/Quake/vr/vr_blender.cpp
-index 82c486132..a6b7b841c 100644
+index 82c4861..a6b7b84 100644
 --- a/Quake/vr/vr_blender.cpp
 +++ b/Quake/vr/vr_blender.cpp
 @@ -264,6 +264,9 @@ struct Edit
@@ -343,7 +417,7 @@ index 82c486132..a6b7b841c 100644
      (void)dir;
      return system((cmd + " &").cStr()) == 0;
 diff --git a/Quake/vr/vr_crtheap_info.c b/Quake/vr/vr_crtheap_info.c
-index 0d1ad5f1f..dfd0b8681 100644
+index 0d1ad5f..dfd0b86 100644
 --- a/Quake/vr/vr_crtheap_info.c
 +++ b/Quake/vr/vr_crtheap_info.c
 @@ -206,6 +206,13 @@ void VR_CrtHeapSetPurgeDelay(long milliseconds)
@@ -361,7 +435,7 @@ index 0d1ad5f1f..dfd0b8681 100644
  {
  }
 diff --git a/Quake/vr/vr_findradius.cpp b/Quake/vr/vr_findradius.cpp
-index 28ef36dc3..3ca2c8e3a 100644
+index 28ef36d..3ca2c8e 100644
 --- a/Quake/vr/vr_findradius.cpp
 +++ b/Quake/vr/vr_findradius.cpp
 @@ -31,11 +31,8 @@
@@ -415,7 +489,7 @@ index 28ef36dc3..3ca2c8e3a 100644
  }
  
 diff --git a/Quake/vr/vr_gfx_gl.cpp b/Quake/vr/vr_gfx_gl.cpp
-index e3c6304fd..46aa670af 100644
+index e3c6304..46aa670 100644
 --- a/Quake/vr/vr_gfx_gl.cpp
 +++ b/Quake/vr/vr_gfx_gl.cpp
 @@ -592,7 +592,7 @@ layout(location = 15) uniform int Reverse;        // drawn in reverse order: the
@@ -437,7 +511,7 @@ index e3c6304fd..46aa670af 100644
      bool retroVariant = false; // (particleProgramFor's retro variants: PARTICLE_PLAIN's MinBlocks)
      for(const auto& row : particleProgram)
 diff --git a/Quake/vr/vr_mapindex.cpp b/Quake/vr/vr_mapindex.cpp
-index 56f93fd2d..179902131 100644
+index 56f93fd..1799021 100644
 --- a/Quake/vr/vr_mapindex.cpp
 +++ b/Quake/vr/vr_mapindex.cpp
 @@ -516,8 +516,7 @@ bool loadCache(Index& idx, const za::String& url, bool anyAge)
@@ -460,7 +534,7 @@ index 56f93fd2d..179902131 100644
      if(!fetchIndex(built, url, status))
      {
 diff --git a/Quake/vr/vr_motion_child.cpp b/Quake/vr/vr_motion_child.cpp
-index 9a9ad774c..d20e6fcbb 100644
+index 9a9ad77..d20e6fc 100644
 --- a/Quake/vr/vr_motion_child.cpp
 +++ b/Quake/vr/vr_motion_child.cpp
 @@ -148,6 +148,9 @@ bool start(const za::Vector<za::String>& args, za::String& error)
@@ -474,7 +548,7 @@ index 9a9ad774c..d20e6fcbb 100644
      if(pid > 0)
      {
 diff --git a/Quake/vr/vr_relight_process.cpp b/Quake/vr/vr_relight_process.cpp
-index 632446123..2ee0ddc29 100644
+index 6324461..2ee0ddc 100644
 --- a/Quake/vr/vr_relight_process.cpp
 +++ b/Quake/vr/vr_relight_process.cpp
 @@ -156,6 +156,9 @@ bool start(int slot, const za::String& exe, const za::Vector<za::String>& args,
