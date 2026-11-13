@@ -61,11 +61,12 @@ static void state(void) {
  }
  axis(SDL_CONTROLLER_AXIS_LEFTX,menuMode?0:mx);axis(SDL_CONTROLLER_AXIS_LEFTY,menuMode?0:my);
  axis(SDL_CONTROLLER_AXIS_TRIGGERRIGHT,held[FIRE]&&!menuMode?1:-1);
- axis(SDL_CONTROLLER_AXIS_TRIGGERLEFT,held[JUMP]&&!menuMode?1:-1);
- button(SDL_CONTROLLER_BUTTON_A,menuMode&&(held[JUMP]||held[FIRE]));
- button(SDL_CONTROLLER_BUTTON_B,menuMode&&(held[BACK]||held[NEXT]));
- button(SDL_CONTROLLER_BUTTON_RIGHTSHOULDER,!menuMode&&held[NEXT]);
- button(SDL_CONTROLLER_BUTTON_LEFTSHOULDER,!menuMode&&held[PREV]);
+ axis(SDL_CONTROLLER_AXIS_TRIGGERLEFT,-1);
+ button(SDL_CONTROLLER_BUTTON_A,held[JUMP]||(menuMode&&held[FIRE]));
+ button(SDL_CONTROLLER_BUTTON_B,held[NEXT]||(menuMode&&held[BACK]));
+ button(SDL_CONTROLLER_BUTTON_Y,!menuMode&&held[PREV]);
+ button(SDL_CONTROLLER_BUTTON_RIGHTSHOULDER,0);
+ button(SDL_CONTROLLER_BUTTON_LEFTSHOULDER,0);
  button(SDL_CONTROLLER_BUTTON_START,held[MENU]);
  button(SDL_CONTROLLER_BUTTON_DPAD_LEFT,menuMode&&mx<-.5f);button(SDL_CONTROLLER_BUTTON_DPAD_RIGHT,menuMode&&mx>.5f);
  button(SDL_CONTROLLER_BUTTON_DPAD_UP,menuMode&&my<-.5f);button(SDL_CONTROLLER_BUTTON_DPAD_DOWN,menuMode&&my>.5f);
@@ -74,7 +75,7 @@ static void state(void) {
 static void look(struct Finger*f,float dx,float dy) {
  if(menuMode)return;
  /* Width-normalized horizontal units keep sensitivity independent of resolution. */
- f->rx+=dx*aspect*480;f->ry+=dy*480;
+ f->rx+=dx*aspect*1200;f->ry+=dy*1200;
  int x=(int)f->rx,y=(int)f->ry;f->rx-=x;f->ry-=y;
  if(x||y){SDL_Event e;SDL_zero(e);e.type=SDL_MOUSEMOTION;e.motion.windowID=SDL_GetWindowID(window);e.motion.which=SDL_TOUCH_MOUSEID;e.motion.xrel=x;e.motion.yrel=y;SDL_PushEvent(&e);}
 }
@@ -89,6 +90,7 @@ int QVR_TouchEvent(const SDL_Event *e,int menu) {
   struct Finger*f=&fingers[i];memset(f,0,sizeof *f);f->used=1;f->id=e->tfinger.fingerId;
   f->x=f->ox=e->tfinger.x;f->y=f->oy=e->tfinger.y;f->role=LOOK;
   for(unsigned b=0;b<sizeof buttons/sizeof buttons[0];b++){
+   if(buttons[b].role==BACK&&!menuMode)continue;
    float dx=(f->x-buttons[b].x)*aspect,dy=f->y-buttons[b].y;
    if(dx*dx+dy*dy<.075f*.075f){f->role=buttons[b].role;break;}
   }
@@ -114,15 +116,40 @@ static void circle(SDL_Renderer*r,float x,float y,float radius) {
  SDL_FPoint p[49];for(int i=0;i<=48;i++){float a=(float)i*6.2831853f/48;p[i].x=x+cosf(a)*radius;p[i].y=y+sinf(a)*radius;}SDL_RenderDrawLinesF(r,p,49);
 }
 static void line(SDL_Renderer*r,float x,float y,float a,float b,float c,float d,float s){SDL_RenderDrawLineF(r,x+a*s,y+b*s,x+c*s,y+d*s);}
+/* Solid geometric glyphs, not a ring of indistinguishable hairline buttons. */
+static void bar(SDL_Renderer*r,float x,float y,float a,float b,float w,float h,float s){SDL_FRect q={x+a*s,y+b*s,w*s,h*s};SDL_RenderFillRectF(r,&q);}
+static void stroke(SDL_Renderer*r,float x,float y,float a,float b,float c,float d,float s){
+ float dx=c-a,dy=d-b,n=sqrtf(dx*dx+dy*dy);if(n==0)return;
+ for(float k=-.09f;k<=.09f;k+=.03f)line(r,x,y,a-dy/n*k,b+dx/n*k,c-dy/n*k,d+dx/n*k,s);
+}
+static void glyph(SDL_Renderer*r,int role,float x,float y,float s){
+ if(role==FIRE){ /* slide, barrel, grip and trigger guard of a sidearm */
+  bar(r,x,y,-1.05f,-.65f,1.9f,.42f,s);bar(r,x,y,.7f,-.53f,.4f,.2f,s);
+  bar(r,x,y,-.87f,-.25f,.48f,.95f,s);bar(r,x,y,-.39f,-.23f,.8f,.18f,s);
+  stroke(r,x,y,.36f,-.1f,.23f,.38f,s);stroke(r,x,y,.23f,.38f,-.42f,.38f,s);
+  bar(r,x,y,-.8f,-.83f,.16f,.2f,s);
+ }else if(role==JUMP){
+  stroke(r,x,y,-.7f,-.05f,0,-.8f,s);stroke(r,x,y,0,-.8f,.7f,-.05f,s);
+  bar(r,x,y,-.1f,-.7f,.2f,1.25f,s);bar(r,x,y,-.7f,.75f,1.4f,.18f,s);
+ }else if(role==NEXT||role==PREV){
+  /* Three cartridges plus a clear cycling chevron. */
+  for(int i=0;i<3;i++){float a=-.8f+i*.4f;bar(r,x,y,a,-.55f,.23f,.7f,s);stroke(r,x,y,a,-.55f,a+.115f,-.75f,s);stroke(r,x,y,a+.115f,-.75f,a+.23f,-.55f,s);}
+  float v=role==NEXT?1:-1;stroke(r,x,y,-.7f*v,.55f,.7f*v,.55f,s);stroke(r,x,y,.7f*v,.55f,.35f*v,.25f,s);stroke(r,x,y,.7f*v,.55f,.35f*v,.85f,s);
+ }else if(role==BACK){stroke(r,x,y,.8f,0,-.8f,0,s);stroke(r,x,y,-.8f,0,-.15f,-.65f,s);stroke(r,x,y,-.8f,0,-.15f,.65f,s);
+ }else if(role==MENU){for(int k=-1;k<=1;k++)bar(r,x,y,-.8f,k*.55f-.09f,1.6f,.18f,s);}
+}
 void QVR_TouchDraw(SDL_Renderer*r,int w,int h) {
- aspect=(float)w/h;
- SDL_SetRenderDrawBlendMode(r,SDL_BLENDMODE_BLEND);SDL_SetRenderDrawColor(r,240,245,250,190);
+ aspect=(float)w/h;SDL_SetRenderDrawBlendMode(r,SDL_BLENDMODE_BLEND);
  for(unsigned i=0;i<sizeof buttons/sizeof buttons[0];i++){
-  float x=buttons[i].x*w,y=buttons[i].y*h,s=h*.030f;int role=buttons[i].role;circle(r,x,y,h*.067f);
-  if(role==FIRE){circle(r,x,y,s*.65f);line(r,x,y,-1.25,0,1.25,0,s);line(r,x,y,0,-1.25,0,1.25,s);}
-  else if(role==JUMP){line(r,x,y,-1,0,0,-1,s);line(r,x,y,0,-1,1,0,s);line(r,x,y,0,-1,0,1,s);}
-  else if(role==NEXT||role==PREV||role==BACK){float v=role==NEXT?1:-1;line(r,x,y,-v,0,v,0,s);line(r,x,y,v,0,0,-1,s);line(r,x,y,v,0,0,1,s);}
-  else if(role==MENU)for(int k=-1;k<=1;k++)line(r,x,y,-1,k*.7f,1,k*.7f,s);
+  int role=buttons[i].role;if(role==BACK&&!menuMode)continue;
+  float x=buttons[i].x*w,y=buttons[i].y*h,s=h*(role==FIRE?.049f:.039f);int held=0;
+  for(int j=0;j<NF;j++)if(fingers[j].used&&fingers[j].role==role)held=1;
+  SDL_SetRenderDrawColor(r,8,12,16,180);glyph(r,role,x+h*.003f,y+h*.004f,s*1.06f);
+  SDL_SetRenderDrawColor(r,held?255:238,held?198:243,held?100:248,held?255:215);glyph(r,role,x,y,s);
  }
- for(int i=0;i<NF;i++)if(fingers[i].used&&fingers[i].role==MOVE){struct Finger*f=&fingers[i];circle(r,f->ox*w,f->oy*h,h*.15f);circle(r,f->x*w,f->y*h,h*.05f);}
+ /* Visible at rest, floating to the finger while moving. */
+ float ox=.15f*w,oy=.76f*h,tx=ox,ty=oy;int moving=0;
+ for(int i=0;i<NF;i++)if(fingers[i].used&&fingers[i].role==MOVE){struct Finger*f=&fingers[i];ox=f->ox*w;oy=f->oy*h;tx=f->x*w;ty=f->y*h;moving=1;break;}
+ SDL_SetRenderDrawColor(r,12,18,25,moving?115:55);circle(r,ox,oy,h*.108f);
+ SDL_SetRenderDrawColor(r,235,242,249,moving?150:70);circle(r,ox,oy,h*.105f);circle(r,tx,ty,h*.04f);
 }

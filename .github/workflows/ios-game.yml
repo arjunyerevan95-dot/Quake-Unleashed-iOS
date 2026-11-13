@@ -40,7 +40,12 @@ jobs:
           cmake --build "$RUNNER_TEMP/host-sdl" --parallel 3
           cmake --install "$RUNNER_TEMP/host-sdl"
           cc ports/ios/game/test_touch_overlay.c $("$RUNNER_TEMP/host-sdl-install/bin/sdl2-config" --cflags --libs) -Wl,-rpath,"$RUNNER_TEMP/host-sdl-install/lib" -lm -o "$RUNNER_TEMP/touch-fixture"
-          SDL_VIDEODRIVER=dummy "$RUNNER_TEMP/touch-fixture"
+          SDL_VIDEODRIVER=dummy QVR_TOUCH_PREVIEW="$RUNNER_TEMP/touch-preview.bmp" "$RUNNER_TEMP/touch-fixture"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Touch-glyph-preview
+          path: ${{ runner.temp }}/touch-preview.bmp
+          if-no-files-found: error
       - name: Compile real engine without retail data
         run: bash ports/ios/game/build_game.sh "$GITHUB_WORKSPACE/engine" "$GITHUB_WORKSPACE/SDL" "$RUNNER_TEMP/native-inputs" "$RUNNER_TEMP/game-output"
       - uses: actions/upload-artifact@v4

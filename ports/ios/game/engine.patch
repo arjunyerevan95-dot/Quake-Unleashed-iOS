@@ -136,7 +136,7 @@ index 162abe4..99df1fe 100644
  // allow mice or other external controllers to add commands
  	IN_Commands ();
 diff --git a/Quake/in_sdl.c b/Quake/in_sdl.c
-index 83bbe65..5b68326 100644
+index 83bbe65..7a40cad 100644
 --- a/Quake/in_sdl.c
 +++ b/Quake/in_sdl.c
 @@ -25,6 +25,9 @@ https://github.com/yquake2/yquake2/blob/master/src/client/input/sdl.c
@@ -177,13 +177,18 @@ index 83bbe65..5b68326 100644
  	IN_UseController (device_index);
  }
  
-@@ -1694,6 +1700,13 @@ void IN_SendKeyEvents (void)
+@@ -1694,6 +1700,18 @@ void IN_SendKeyEvents (void)
  
  	while (SDL_PollEvent(&event))
  	{
 +		#ifdef QVR_IOS
 +		if (QVR_TouchEvent(&event, key_dest != key_game)) {
 +            int touch_device=QVR_TouchDeviceIndex();
++            /* Saved legacy configs can unbind native controls; fill gaps only, never overwrite custom binds. */
++            if(!keybindings[K_RTRIGGER] || !*keybindings[K_RTRIGGER])Key_SetBinding(K_RTRIGGER,"+attack");
++            if(!keybindings[K_ABUTTON] || !*keybindings[K_ABUTTON])Key_SetBinding(K_ABUTTON,"+jump");
++            if(!keybindings[K_BBUTTON] || !*keybindings[K_BBUTTON])Key_SetBinding(K_BBUTTON,"impulse 10");
++            if(!keybindings[K_YBUTTON] || !*keybindings[K_YBUTTON])Key_SetBinding(K_YBUTTON,"impulse 12");
 +            if(touch_device>=0 && joy_active_device!=touch_device)IN_UseController(touch_device);
 +            IN_Commands(); continue;
 +        }
@@ -191,7 +196,7 @@ index 83bbe65..5b68326 100644
  		if (VR_ImGuiEvent (&event, (event.type == SDL_KEYDOWN || event.type == SDL_KEYUP) ? IN_SDL2_ScancodeToQuakeKey (event.key.keysym.scancode) : -1)) // QVR: a flat-screen tool's ImGui took it (the Rig Studio: vr/vr_imgui.cpp); the key, so a key bound to a tool's toggle still reaches its binding
  			continue;
  		switch (event.type)
-@@ -1714,8 +1727,12 @@ void IN_SendKeyEvents (void)
+@@ -1714,8 +1732,12 @@ void IN_SendKeyEvents (void)
  			}
  			else if (event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED)
  			{
@@ -543,6 +548,21 @@ index e3c6304..46aa670 100644
      }
      bool retroVariant = false; // (particleProgramFor's retro variants: PARTICLE_PLAIN's MinBlocks)
      for(const auto& row : particleProgram)
+diff --git a/Quake/vr/vr_main.cpp b/Quake/vr/vr_main.cpp
+index 13767ef..8b7005f 100644
+--- a/Quake/vr/vr_main.cpp
++++ b/Quake/vr/vr_main.cpp
+@@ -374,6 +374,10 @@ void VR_Restart_f()
+ // demo started from the command line runs instead of any.
+ void startGameCommands()
+ {
++#ifdef QVR_IOS
++    // On a phone, open the actual menu instead of an attract demo mistaken for gameplay.
++    if(!sv.active && !cls.demoplayback && cls.state != ca_connected){Cbuf_InsertText("menu_main\n");return;}
++#endif
+     if(vr_enabled.value && !sv.active && !cls.demoplayback && cls.state != ca_connected)
+     {
+         if(vr_setup_pending.value != 0.f)
 diff --git a/Quake/vr/vr_mapindex.cpp b/Quake/vr/vr_mapindex.cpp
 index 56f93fd..1799021 100644
 --- a/Quake/vr/vr_mapindex.cpp
