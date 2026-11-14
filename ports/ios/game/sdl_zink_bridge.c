@@ -39,7 +39,7 @@ int QVR_IOSCanRender(void){
    fprintf(stderr,"UNLEASHED frame gate state=%d window=%dx%d drawable=%dx%d flags=%u\n",state,ww,hh,dw,dh,game_window?SDL_GetWindowFlags(game_window):0);
    lastState=state;lastW=ww;lastH=hh;--remaining;
  }
- return game_window && !suspended && active;
+ return game_window && !suspended && QVR_IOSApplicationActive();
 }
 static int width=640,height=360,attrs[64],interval=1;
 SDL_Window *QVR_CreateWindow(const char*t,int x,int y,int w,int h,Uint32 flags){
