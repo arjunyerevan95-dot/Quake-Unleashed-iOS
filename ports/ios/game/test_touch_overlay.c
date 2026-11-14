@@ -5,7 +5,7 @@
 static void finger(Uint32 type,Sint64 id,float x,float y,int menu){SDL_Event e;SDL_zero(e);e.type=type;e.tfinger.fingerId=id;e.tfinger.x=x;e.tfinger.y=y;assert(QVR_TouchEvent(&e,menu));}
 static int slot(int role){for(int i=0;i<NB;i++)if(buttons[i].role==role)return i;assert(0);return -1;}
 static void press(Uint32 type,Sint64 id,int role,int menu){int i=slot(role);finger(type,id,buttons[i].x,buttons[i].y,menu);}
-static int near(float a,float b){return fabsf(a-b)<.0001f;}
+static int closeFloat(float a,float b){return fabsf(a-b)<.0001f;}
 int main(void){
  SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS,"1");SDL_SetMainReady();assert(SDL_Init(SDL_INIT_VIDEO|SDL_INIT_GAMECONTROLLER)==0);
  const char*tmp=SDL_getenv("TMPDIR");if(!tmp)tmp=SDL_getenv("TEMP");if(!tmp)tmp=".";
@@ -32,20 +32,43 @@ int main(void){
  /* Gear enters editor; drag and resize the fire control, never firing. */
  finger(SDL_FINGERDOWN,10,.5f,.1f,1);assert(QVR_TouchEditing());
  int fire=slot(FIRE);press(SDL_FINGERDOWN,11,FIRE,1);finger(SDL_FINGERMOTION,11,.70f,.72f,1);finger(SDL_FINGERUP,11,.70f,.72f,1);
- assert(near(buttons[fire].x,.70f)&&near(buttons[fire].y,.72f));assert(SDL_GameControllerGetAxis(c,SDL_CONTROLLER_AXIS_TRIGGERRIGHT)==0);assert(!SDL_GameControllerGetButton(c,SDL_CONTROLLER_BUTTON_A));
+ assert(closeFloat(buttons[fire].x,.70f)&&closeFloat(buttons[fire].y,.72f));assert(SDL_GameControllerGetAxis(c,SDL_CONTROLLER_AXIS_TRIGGERRIGHT)==0);assert(!SDL_GameControllerGetButton(c,SDL_CONTROLLER_BUTTON_A));
  float rad=itemRadius(fire);finger(SDL_FINGERDOWN,12,buttons[fire].x+rad/aspect,buttons[fire].y+rad,1);assert(editResize);
- finger(SDL_FINGERMOTION,12,buttons[fire].x+rad*1.3f/aspect,buttons[fire].y+rad*1.3f,1);finger(SDL_FINGERUP,12,.8f,.8f,1);assert(near(buttons[fire].scale,1.3f));
+ finger(SDL_FINGERMOTION,12,buttons[fire].x+rad*1.3f/aspect,buttons[fire].y+rad*1.3f,1);finger(SDL_FINGERUP,12,.8f,.8f,1);assert(closeFloat(buttons[fire].scale,1.3f));
  finger(SDL_FINGERDOWN,13,.58f,.1f,1);assert(!editing&&!saveFailed);
- memcpy(buttons,defaults,sizeof buttons);assert(QVR_LayoutLoad(layoutPath,buttons,NB)==1);assert(near(buttons[fire].x,.70f)&&near(buttons[fire].scale,1.3f));
+ memcpy(buttons,defaults,sizeof buttons);assert(QVR_LayoutLoad(layoutPath,buttons,NB)==1);assert(closeFloat(buttons[fire].x,.70f)&&closeFloat(buttons[fire].scale,1.3f));
  /* Explicit subsequent save preserves the existing user's layout as a backup. */
  assert(QVR_LayoutSave(layoutPath,buttons,NB)==0);char backup[1100];snprintf(backup,sizeof backup,"%s.bak.0",layoutPath);
- QVR_TouchItem previous[NB];memcpy(previous,defaults,sizeof previous);assert(QVR_LayoutLoad(backup,previous,NB)==1);assert(near(previous[fire].x,.70f));remove(backup);
+ QVR_TouchItem previous[NB];memcpy(previous,defaults,sizeof previous);assert(QVR_LayoutLoad(backup,previous,NB)==1);assert(closeFloat(previous[fire].x,.70f));remove(backup);
  /* Cancel restores a user's saved layout. */
- beginEdit();press(SDL_FINGERDOWN,14,FIRE,1);finger(SDL_FINGERMOTION,14,.62f,.6f,1);finger(SDL_FINGERUP,14,.62f,.6f,1);finger(SDL_FINGERDOWN,15,.42f,.1f,1);assert(!editing&&near(buttons[fire].x,.70f));
+ beginEdit();press(SDL_FINGERDOWN,14,FIRE,1);finger(SDL_FINGERMOTION,14,.62f,.6f,1);finger(SDL_FINGERUP,14,.62f,.6f,1);finger(SDL_FINGERDOWN,15,.42f,.1f,1);assert(!editing&&closeFloat(buttons[fire].x,.70f));
  /* Invalid/newer files do not replace an in-memory customized layout. */
- char invalid[1100];snprintf(invalid,sizeof invalid,"%s.invalid",layoutPath);FILE*f=fopen(invalid,"w");assert(f);fputs("QVR_TOUCH_LAYOUT 99 1\n2 0.1 0.1 1\n",f);fclose(f);assert(QVR_LayoutLoad(invalid,buttons,NB)==-1);assert(near(buttons[fire].x,.70f));remove(invalid);
+ char invalid[1100];snprintf(invalid,sizeof invalid,"%s.invalid",layoutPath);FILE*f=fopen(invalid,"w");assert(f);fputs("QVR_TOUCH_LAYOUT 99 1\n2 0.1 0.1 1\n",f);fclose(f);assert(QVR_LayoutLoad(invalid,buttons,NB)==-1);assert(closeFloat(buttons[fire].x,.70f));remove(invalid);
  /* Edited position still reaches native fire while swiping. */
  press(SDL_FINGERDOWN,16,FIRE,0);assert(SDL_GameControllerGetAxis(c,SDL_CONTROLLER_AXIS_TRIGGERRIGHT)>30000);press(SDL_FINGERUP,16,FIRE,0);assert(SDL_GameControllerGetAxis(c,SDL_CONTROLLER_AXIS_TRIGGERRIGHT)==0);
+ /* Pinch owns both contacts, clamps scale, ignores extras and drains either lift order. */
+ SDL_FlushEvent(SDL_MOUSEMOTION);
+ beginEdit();press(SDL_FINGERDOWN,21,FIRE,1);finger(SDL_FINGERDOWN,22,.75f,.72f,1);
+ finger(SDL_FINGERMOTION,22,.80f,.72f,1);assert(closeFloat(buttons[fire].scale,1.8f));
+ finger(SDL_FINGERDOWN,23,.9f,.9f,1);finger(SDL_FINGERMOTION,23,.3f,.3f,1);assert(closeFloat(buttons[fire].scale,1.8f));
+ finger(SDL_FINGERMOTION,22,.705f,.72f,1);assert(closeFloat(buttons[fire].scale,.6f));
+ assert(SDL_GameControllerGetAxis(c,SDL_CONTROLLER_AXIS_TRIGGERRIGHT)==0);
+ finger(SDL_FINGERUP,21,.7f,.72f,1);finger(SDL_FINGERMOTION,22,.4f,.4f,1);
+ assert(closeFloat(buttons[fire].x,.7f)&&closeFloat(buttons[fire].scale,.6f));
+ finger(SDL_FINGERUP,22,.4f,.4f,1);finger(SDL_FINGERUP,23,.3f,.3f,1);cancelEdit();
+ assert(closeFloat(buttons[fire].scale,1.3f));
+ beginEdit();press(SDL_FINGERDOWN,24,FIRE,1);finger(SDL_FINGERDOWN,25,.75f,.72f,1);
+ finger(SDL_FINGERMOTION,25,.76f,.72f,1);assert(closeFloat(buttons[fire].scale,1.56f));
+ finger(SDL_FINGERUP,25,.76f,.72f,1);finger(SDL_FINGERMOTION,24,.5f,.5f,1);assert(closeFloat(buttons[fire].x,.7f));
+ finger(SDL_FINGERUP,24,.5f,.5f,1);finger(SDL_FINGERDOWN,26,.58f,.1f,1);assert(!editing);
+ memcpy(buttons,defaults,sizeof buttons);assert(QVR_LayoutLoad(layoutPath,buttons,NB)==1);assert(closeFloat(buttons[fire].scale,1.56f));
+ beginEdit();press(SDL_FINGERDOWN,27,FIRE,1);finger(SDL_FINGERDOWN,28,.75f,.72f,1);
+ finger(SDL_FINGERMOTION,28,.8f,.72f,1);SDL_zero(e);e.type=SDL_APP_WILLENTERBACKGROUND;QVR_TouchEvent(&e,1);
+ assert(!editing&&!editPinch&&closeFloat(buttons[fire].scale,1.56f));
+ assert(!SDL_HasEvent(SDL_MOUSEMOTION));
+ beginEdit();press(SDL_FINGERDOWN,29,FIRE,1);press(SDL_FINGERDOWN,30,FIRE,1);
+ finger(SDL_FINGERMOTION,30,.75f,.72f,1);assert(closeFloat(buttons[fire].scale,1.56f));
+ finger(SDL_FINGERMOTION,30,.8f,.72f,1);assert(closeFloat(buttons[fire].scale,1.8f));cancelEdit();
  SDL_Surface*s=SDL_CreateRGBSurfaceWithFormat(0,1536,707,32,SDL_PIXELFORMAT_RGBA32);assert(s);SDL_Renderer*r=SDL_CreateSoftwareRenderer(s);assert(r);
  memcpy(buttons,defaults,sizeof buttons);QVR_TouchDraw(r,1536,707);const char*preview=SDL_getenv("QVR_TOUCH_PREVIEW");if(preview){SDL_RenderPresent(r);assert(SDL_SaveBMP(s,preview)==0);}
  remove(layoutPath);SDL_DestroyRenderer(r);SDL_FreeSurface(s);SDL_GameControllerClose(c);SDL_Quit();puts("PASS real SDL routes, multitouch, crouch, menu, edit drag/resize/save/reload/cancel and glyph draw");return 0;

@@ -22,6 +22,9 @@ static const QVR_TouchItem defaults[]=DEFAULT_LAYOUT;
 static QVR_TouchItem editSaved[NB];
 static int editing,selected=-1,editDrag=-1,editResize,saveFailed;
 static SDL_FingerID editFinger;
+static SDL_FingerID editSecond;
+static int editPinch;
+static float editX,editY,editX2,editY2,editSpan,editScale;
 static char layoutPath[1024]="touch-layout-v1.cfg";
 static SDL_Sensor *gyroSensor;
 static int gyroEnabled,gyroBackground,gyroIndex=-1;
@@ -49,8 +52,17 @@ static void clampItem(int i){float r=itemRadius(i);buttons[i].x=fmaxf(r/aspect,f
 static int hit(float x,float y,float cx,float cy,float r){float dx=(x-cx)*aspect,dy=y-cy;return dx*dx+dy*dy<r*r;}
 static void editEvent(const SDL_Event*e){
  float x=e->tfinger.x,y=e->tfinger.y;
+ if(!isfinite(x)||!isfinite(y))return;
  if(e->type==SDL_FINGERDOWN){
-  if(editDrag>=0)return;
+  if(editDrag>=0){
+   if(!editPinch&&e->tfinger.fingerId!=editFinger){
+    editSecond=e->tfinger.fingerId;editX2=x;editY2=y;
+    editSpan=hypotf((editX2-editX)*aspect,editY2-editY);
+    editScale=buttons[editDrag].scale;editPinch=1;
+   }
+   return;
+  }
+  editX=x;editY=y;
   /* Persistent toolbar: cancel, reset, save. */
   if(hit(x,y,.42f,.1f,.065f)){cancelEdit();return;}
   if(hit(x,y,.50f,.1f,.065f)){memcpy(buttons,defaults,sizeof buttons);selected=-1;return;}
@@ -60,8 +72,22 @@ static void editEvent(const SDL_Event*e){
   if(selected>=0){float r=itemRadius(selected);if(hit(x,y,buttons[selected].x+r/aspect,buttons[selected].y+r,.045f)){editDrag=selected;editResize=1;editFinger=e->tfinger.fingerId;return;}}
   selected=-1;
   for(int i=0;i<NB;i++)if(hit(x,y,buttons[i].x,buttons[i].y,itemRadius(i))){selected=editDrag=i;editResize=0;editFinger=e->tfinger.fingerId;break;}
+ }else if(editDrag>=0&&editPinch){
+  if(e->tfinger.fingerId!=editFinger&&e->tfinger.fingerId!=editSecond)return;
+  if(e->type==SDL_FINGERUP){
+   /* Drain the remaining owned contact; never jump back into drag or gameplay. */
+   if(editPinch==2){editPinch=0;editDrag=-1;return;}
+   if(e->tfinger.fingerId==editFinger)editFinger=editSecond;
+   editSecond=editFinger;editPinch=2;return;
+  }
+  if(editPinch==2)return;
+  if(e->tfinger.fingerId==editFinger){editX=x;editY=y;}else{editX2=x;editY2=y;}
+  float span=hypotf((editX2-editX)*aspect,editY2-editY);
+  if(editSpan<.01f){if(span>=.01f){editSpan=span;editScale=buttons[editDrag].scale;}return;}
+  buttons[editDrag].scale=fmaxf(.6f,fminf(1.8f,editScale*span/editSpan));clampItem(editDrag);
  }else if(editDrag>=0&&e->tfinger.fingerId==editFinger){
   if(e->type==SDL_FINGERUP){editDrag=-1;return;}
+  editX=x;editY=y;
   QVR_TouchItem*b=&buttons[editDrag];
   if(editResize){float dx=(x-b->x)*aspect,dy=y-b->y;float base=b->role==MOVE?.15f:b->role==FIRE?.09f:.065f;b->scale=fmaxf(.6f,fminf(1.8f,sqrtf(dx*dx+dy*dy)/(base*1.41421356f)));}
   else{b->x=x;b->y=y;}clampItem(editDrag);
@@ -70,6 +96,7 @@ static void editEvent(const SDL_Event*e){
 static void axis(int a,float v) { if(pad) SDL_JoystickSetVirtualAxis(pad,a,(Sint16)(fmaxf(-1,fminf(1,v))*32767)); }
 static void button(int b,int v) { if(pad) SDL_JoystickSetVirtualButton(pad,b,(Uint8)(v!=0)); }
 void QVR_TouchReset(void) {
+ editDrag=-1;editPinch=0;
  memset(fingers,0,sizeof fingers);
  if(!pad)return;
  for(int i=0;i<SDL_CONTROLLER_AXIS_MAX;i++) axis(i,i>=SDL_CONTROLLER_AXIS_TRIGGERLEFT?-1.f:0.f);
