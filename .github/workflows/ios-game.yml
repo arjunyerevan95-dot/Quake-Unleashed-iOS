@@ -33,6 +33,8 @@ jobs:
           git -C engine apply ../ports/ios/game/mobile-defaults.patch
           git -C engine apply --check ../ports/ios/game/audio-diagnostics.patch
           git -C engine apply ../ports/ios/game/audio-diagnostics.patch
+          git -C engine apply --check ../ports/ios/game/living-reactions.patch
+          git -C engine apply ../ports/ios/game/living-reactions.patch
           git -C SDL apply --check ../ports/ios/game/sdl-coremotion-timestamps.patch
           git -C SDL apply ../ports/ios/game/sdl-coremotion-timestamps.patch
           git -C SDL apply --check ../ports/ios/game/sdl-audio-startup.patch
@@ -63,6 +65,8 @@ jobs:
         run: python3 ports/ios/game/test_ui_migration.py "$GITHUB_WORKSPACE/engine"
       - name: Vanilla behavior migration
         run: python3 ports/ios/game/test_vanilla_profile.py "$GITHUB_WORKSPACE/engine"
+      - name: Living reaction restore and backup
+        run: python3 ports/ios/game/test_living_reactions.py "$GITHUB_WORKSPACE/engine"
       - name: Audio startup synchronization regression
         run: python3 ports/ios/game/test_audio_startup.py "$GITHUB_WORKSPACE/SDL"
       - name: Mobile defaults and gyro regression

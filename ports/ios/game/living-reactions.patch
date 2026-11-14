@@ -1,0 +1,38 @@
+--- a/Quake/vr/vr_main.cpp
++++ b/Quake/vr/vr_main.cpp
+@@ -413,6 +413,25 @@
+             if(Cvar_VariableValue(rule.name)==rule.previous) Cvar_Set(rule.name,rule.value);
+         Cvar_Set("vr_ios_vanilla_version","1");
+     }
++    // Explicitly requested restoration of living physics, not enhanced enemy AI.
++    // Prior profile zeros have no provenance: restore only these named disabled gates.
++    if(Cvar_VariableValue("vr_ios_reactions_version") == 0.f){
++        const char *names[]={"vr_knockdown","vr_kdtrig","vr_hit_stagger","vr_hit_react"};
++        char path[MAX_OSPATH];FILE *backup=nullptr;
++        for(int i=0;i<100 && !backup;i++){
++            q_snprintf(path,sizeof(path),"%s/ios-living-reactions-before-%d.cfg",com_gamedir,i);
++            backup=fopen(path,"wx");
++        }
++        if(backup){
++            bool ok=true;
++            for(const char *name:names) if(fprintf(backup,"%s \"%.9g\"\n",name,(double)Cvar_VariableValue(name))<0)ok=false;
++            if(fclose(backup)!=0)ok=false;
++            if(ok){
++                for(const char *name:names) if(Cvar_VariableValue(name)==0.f)Cvar_Set(name,"1");
++                Cvar_Set("vr_ios_reactions_version","1");
++            }
++        }
++    }
+     // One-time phone migration after saved config execution. Preserve non-default custom scales.
+     if(Cvar_VariableValue("scr_ios_ui_version") < 1.f){
+         const char* scales[]={"scr_menuscale","scr_sbarscale","scr_conscale"};
+--- a/Quake/vr/vr_cvars.inc
++++ b/Quake/vr/vr_cvars.inc
+@@ -4271,3 +4271,7 @@
+ #ifdef QVR_IOS
+ QVR_CVAR(vr_ios_flat_ui_version, "0", CVAR_ARCHIVE)
+ #endif
++
++#ifdef QVR_IOS
++QVR_CVAR(vr_ios_reactions_version, "0", CVAR_ARCHIVE)
++#endif

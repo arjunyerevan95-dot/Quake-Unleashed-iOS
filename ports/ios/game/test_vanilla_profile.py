@@ -2,7 +2,7 @@
 import pathlib,re,subprocess,sys,tempfile
 s=(pathlib.Path(sys.argv[1])/'Quake/vr/vr_main.cpp').read_text()
 a=s.index('    if(Cvar_VariableValue("vr_ios_vanilla_version") == 0.f)')
-b=s.index('    // One-time phone migration',a)
+b=s.index('    // Explicitly requested restoration',a)
 block=s[a:b]
 rows=re.findall(r'\{"(vr_[a-z_]+)",([0-9.]+)f,"([0-9.]+)"\}',block)
 assert len(rows)==22 and 'vr_push' not in dict((n,v) for n,o,v in rows)
