@@ -30,7 +30,16 @@ int QVR_IOSCanRender(void){
  /* A transient portrait SDL size during UIKit rotation must not deadlock the
     frame loop. The scene is fixed landscape; SDL letterboxes until layout settles.
     Only lifecycle state, not orientation, is a GPU submission permission gate. */
- return game_window && !suspended && QVR_IOSApplicationActive();
+ int active=QVR_IOSApplicationActive();
+ static int lastState=-1,lastW=-1,lastH=-1,remaining=48;
+ int ww=0,hh=0;if(game_window)SDL_GetWindowSize(game_window,&ww,&hh);
+ int state=(game_window?1:0)|(suspended?2:0)|(active?4:0);
+ if(remaining>0&&(state!=lastState||ww!=lastW||hh!=lastH)){
+   int dw=0,dh=0;if(renderer)SDL_GetRendererOutputSize(renderer,&dw,&dh);
+   fprintf(stderr,"UNLEASHED frame gate state=%d window=%dx%d drawable=%dx%d flags=%u\n",state,ww,hh,dw,dh,game_window?SDL_GetWindowFlags(game_window):0);
+   lastState=state;lastW=ww;lastH=hh;--remaining;
+ }
+ return game_window && !suspended && active;
 }
 static int width=640,height=360,attrs[64],interval=1;
 SDL_Window *QVR_CreateWindow(const char*t,int x,int y,int w,int h,Uint32 flags){
@@ -95,6 +104,23 @@ SDL_GLContext QVR_GL_CreateContext(SDL_Window*w){
  fprintf(stderr,"UNLEASHED initial iOS bridge: %s, %dx%d CPU readback to Metal\n",r,width,height);return ctx;
  fail:QVR_GL_DeleteContext(ctx);return NULL;
 }
+/* Keep scene readback cheap while drawing controls at drawable resolution.
+   Preserve the same letterboxed normalized coordinate space as SDL touch input. */
+static void QVR_DrawNativeTouch(void){
+ int dw=0,dh=0;
+ if(SDL_GetRendererOutputSize(renderer,&dw,&dh)!=0||dw<=0||dh<=0)return;
+ double scale=(double)dw/width;
+ if((double)dh/height<scale)scale=(double)dh/height;
+ SDL_Rect viewport={(dw-(int)(width*scale))/2,(dh-(int)(height*scale))/2,
+                    (int)(width*scale),(int)(height*scale)};
+ if(viewport.w<=0||viewport.h<=0)return;
+ if(SDL_RenderSetLogicalSize(renderer,0,0)!=0)return;
+ SDL_RenderSetViewport(renderer,&viewport);
+ SDL_RenderSetScale(renderer,1,1);
+ QVR_TouchDraw(renderer,viewport.w,viewport.h);
+ /* Restore logical coordinates before SDL processes another touch event. */
+ SDL_RenderSetLogicalSize(renderer,width,height);
+}
 void QVR_GL_SwapWindow(SDL_Window*w){
  static unsigned presents;
  (void)w;if(!ctx||!texture||!QVR_IOSCanRender())return;
@@ -106,7 +132,7 @@ void QVR_GL_SwapWindow(SDL_Window*w){
  if(SDL_UpdateTexture(texture,NULL,pixels,width*4)!=0 || SDL_RenderClear(renderer)!=0 ||
     SDL_RenderCopyEx(renderer,texture,NULL,NULL,0,NULL,SDL_FLIP_VERTICAL)!=0){
    if(presents<3)fprintf(stderr,"UNLEASHED present failed: %s\n",SDL_GetError());
- }else{QVR_TouchDraw(renderer,width,height);SDL_RenderPresent(renderer);}
+ }else{QVR_DrawNativeTouch();SDL_RenderPresent(renderer);}
  if(presents<3)fprintf(stderr,"UNLEASHED present %u: returned\n",presents);
  ++presents;
 }

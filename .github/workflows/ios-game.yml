@@ -27,6 +27,9 @@ jobs:
       - name: Apply isolated iOS adapter
         run: |
           git -C engine apply ../ports/ios/game/engine.patch
+          git -C SDL apply --check ../ports/ios/game/sdl-coremotion-timestamps.patch
+          git -C SDL apply ../ports/ios/game/sdl-coremotion-timestamps.patch
+          python3 ports/ios/game/test_coremotion_timestamps.py SDL
           mkdir -p engine/ports/ios
           cp -R ports/ios/game engine/ports/ios/game
       - name: Fetch verified native libraries
@@ -46,6 +49,8 @@ jobs:
           name: Touch-glyph-preview
           path: ${{ runner.temp }}/touch-preview.bmp
           if-no-files-found: error
+      - name: Native drawable touch coordinates
+        run: python3 ports/ios/game/test_native_touch_draw.py
       - name: Focused phone UI migration
         run: python3 ports/ios/game/test_ui_migration.py "$GITHUB_WORKSPACE/engine"
       - name: Flat profile source contracts

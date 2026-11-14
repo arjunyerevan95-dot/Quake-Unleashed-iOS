@@ -1,0 +1,32 @@
+--- a/src/sensor/coremotion/SDL_coremotionsensor.m
++++ b/src/sensor/coremotion/SDL_coremotionsensor.m
+@@ -150,10 +150,10 @@
+             data[0] = -acceleration.x * SDL_STANDARD_GRAVITY;
+             data[1] = -acceleration.y * SDL_STANDARD_GRAVITY;
+             data[2] = -acceleration.z * SDL_STANDARD_GRAVITY;
+-            if (SDL_memcmp(data, sensor->hwdata->data, sizeof(data)) != 0) {
+-                SDL_PrivateSensorUpdate(sensor, 0, data, SDL_arraysize(data));
+-                SDL_memcpy(sensor->hwdata->data, data, sizeof(data));
+-            }
++            /* iOS port: propagate real sample time in microseconds.
++               Equal rates on successive samples are still fresh sensor data. */
++            SDL_PrivateSensorUpdate(sensor, (Uint64)(accelerometerData.timestamp * 1000000.0), data, SDL_arraysize(data));
++            SDL_memcpy(sensor->hwdata->data, data, sizeof(data));
+         }
+     } break;
+     case SDL_SENSOR_GYRO:
+@@ -165,10 +165,10 @@
+             data[0] = rotationRate.x;
+             data[1] = rotationRate.y;
+             data[2] = rotationRate.z;
+-            if (SDL_memcmp(data, sensor->hwdata->data, sizeof(data)) != 0) {
+-                SDL_PrivateSensorUpdate(sensor, 0, data, SDL_arraysize(data));
+-                SDL_memcpy(sensor->hwdata->data, data, sizeof(data));
+-            }
++            /* iOS port: propagate real sample time in microseconds.
++               Equal rates on successive samples are still fresh sensor data. */
++            SDL_PrivateSensorUpdate(sensor, (Uint64)(gyroData.timestamp * 1000000.0), data, SDL_arraysize(data));
++            SDL_memcpy(sensor->hwdata->data, data, sizeof(data));
+         }
+     } break;
+     default:
