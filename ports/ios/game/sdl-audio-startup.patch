@@ -1,0 +1,39 @@
+--- a/src/audio/coreaudio/SDL_coreaudio.m
++++ b/src/audio/coreaudio/SDL_coreaudio.m
+@@ -1077,10 +1077,12 @@
+     }
+ 
+ #ifndef MACOSX_COREAUDIO
++    fprintf(stderr, "UNLEASHED audio session activation begin\n");
+     if (!update_audio_session(this, SDL_TRUE, SDL_TRUE)) {
+         return -1;
+     }
+ 
++    fprintf(stderr, "UNLEASHED audio session activation returned\n");
+     /* Stop CoreAudio from doing expensive audio rate conversion */
+     @autoreleasepool {
+         AVAudioSession *session = [AVAudioSession sharedInstance];
+@@ -1162,7 +1164,22 @@
+         return -1;
+     }
+ 
+-    SDL_SemWait(this->hidden->ready_semaphore);
++#if !defined(MACOSX_COREAUDIO)
++    /* AudioQueue creation can require main-runloop work while UIKit completes
++       launch rotation. Do not starve that runloop waiting for the audio thread. */
++    if ([NSThread isMainThread]) {
++        int wait_status;
++        fprintf(stderr, "UNLEASHED audio queue wait begin\n");
++        while ((wait_status = SDL_SemWaitTimeout(this->hidden->ready_semaphore, 1)) == SDL_MUTEX_TIMEDOUT)
++            CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0.001, true);
++        fprintf(stderr, "UNLEASHED audio queue wait returned %d\n", wait_status);
++        if (wait_status != 0) return SDL_SetError("AudioQueue ready semaphore failed");
++    } else
++#endif
++    {
++        if (SDL_SemWait(this->hidden->ready_semaphore) != 0)
++            return SDL_SetError("AudioQueue ready semaphore failed");
++    }
+     SDL_DestroySemaphore(this->hidden->ready_semaphore);
+     this->hidden->ready_semaphore = NULL;
+ 

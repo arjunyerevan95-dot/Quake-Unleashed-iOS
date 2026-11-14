@@ -1,0 +1,41 @@
+--- a/Quake/snd_sdl.c
++++ b/Quake/snd_sdl.c
+@@ -81,12 +81,18 @@
+ 	char	drivername[128];
+ 	const char *driver, *device;
+ 
++	#ifdef QVR_IOS
++	fprintf(stderr,"UNLEASHED SDL audio subsystem begin\n");
++	#endif
+ 	if (SDL_InitSubSystem(SDL_INIT_AUDIO) < 0)
+ 	{
+ 		Con_Printf("Couldn't init SDL audio: %s\n", SDL_GetError());
+ 		return false;
+ 	}
+ 
++	#ifdef QVR_IOS
++	fprintf(stderr,"UNLEASHED SDL audio subsystem ready\n");
++	#endif
+ 	/* Set up the desired format */
+ 	desired.freq = snd_mixspeed.value;
+ 	desired.format = (loadas8bit.value) ? AUDIO_U8 : AUDIO_S16SYS;
+@@ -104,6 +110,9 @@
+ 	desired.callback = paint_audio;
+ 	desired.userdata = NULL;
+ 
++	#ifdef QVR_IOS
++	fprintf(stderr,"UNLEASHED SDL audio device open begin\n");
++	#endif
+ 	/* Open the audio device */
+ 	if (SDL_OpenAudio(&desired, NULL) == -1)
+ 	{
+@@ -112,6 +121,9 @@
+ 		return false;
+ 	}
+ 
++	#ifdef QVR_IOS
++	fprintf(stderr,"UNLEASHED SDL audio device open returned\n");
++	#endif
+ 	memset ((void *) dma, 0, sizeof(dma_t));
+ 	shm = dma;
+ 

@@ -31,8 +31,12 @@ jobs:
           git -C engine apply ../ports/ios/game/vanilla-profile.patch
           git -C engine apply --check ../ports/ios/game/mobile-defaults.patch
           git -C engine apply ../ports/ios/game/mobile-defaults.patch
+          git -C engine apply --check ../ports/ios/game/audio-diagnostics.patch
+          git -C engine apply ../ports/ios/game/audio-diagnostics.patch
           git -C SDL apply --check ../ports/ios/game/sdl-coremotion-timestamps.patch
           git -C SDL apply ../ports/ios/game/sdl-coremotion-timestamps.patch
+          git -C SDL apply --check ../ports/ios/game/sdl-audio-startup.patch
+          git -C SDL apply ../ports/ios/game/sdl-audio-startup.patch
           python3 ports/ios/game/test_coremotion_timestamps.py SDL
           mkdir -p engine/ports/ios
           cp -R ports/ios/game engine/ports/ios/game
@@ -59,6 +63,8 @@ jobs:
         run: python3 ports/ios/game/test_ui_migration.py "$GITHUB_WORKSPACE/engine"
       - name: Vanilla behavior migration
         run: python3 ports/ios/game/test_vanilla_profile.py "$GITHUB_WORKSPACE/engine"
+      - name: Audio startup synchronization regression
+        run: python3 ports/ios/game/test_audio_startup.py "$GITHUB_WORKSPACE/SDL"
       - name: Mobile defaults and gyro regression
         run: python3 ports/ios/game/test_mobile_feedback.py "$GITHUB_WORKSPACE/engine"
       - name: Flat profile source contracts
