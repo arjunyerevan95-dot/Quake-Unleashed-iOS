@@ -137,8 +137,4 @@ void QVR_GL_SwapWindow(SDL_Window*w){
  ++presents;
 }
 
-#ifdef QVR_IOS
-int QVR_IOSStartFrames(void (*callback)(void *)) {
- return SDL_iPhoneSetAnimationCallback(game_window,1,callback,NULL);
-}
-#endif
+/* The stable native display-link owner is implemented in ios_bootstrap.m. */

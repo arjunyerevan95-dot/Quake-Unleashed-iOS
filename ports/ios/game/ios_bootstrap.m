@@ -2,7 +2,34 @@
  * Private retail data stays in Documents/id1, never in the application bundle. */
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
+#import <QuartzCore/CADisplayLink.h>
 #include "SDL_syswm.h"
+#include <stdio.h>
+typedef void (*QVRFrameCallback)(void *);
+/* Own the frame clock independently of SDL's window view controller. SDL replaces
+   that controller on video restarts; rotation must not orphan the engine clock. */
+@interface QVRFrameDriver : NSObject
+@property(nonatomic, strong) CADisplayLink *link;
+@property(nonatomic, assign) QVRFrameCallback callback;
+@end
+@implementation QVRFrameDriver
+- (void)tick:(CADisplayLink *)sender {
+    (void)sender;
+    if(self.callback) self.callback(NULL); /* Engine's reentry and active GPU gates remain authoritative. */
+}
+@end
+static QVRFrameDriver *frameDriver;
+int QVR_IOSStartFrames(void (*callback)(void *)) {
+    if(![NSThread isMainThread] || !callback)return -1;
+    if(!frameDriver)frameDriver=[QVRFrameDriver new];
+    [frameDriver.link invalidate];
+    frameDriver.callback=callback;
+    frameDriver.link=[CADisplayLink displayLinkWithTarget:frameDriver selector:@selector(tick:)];
+    frameDriver.link.preferredFramesPerSecond=UIScreen.mainScreen.maximumFramesPerSecond;
+    [frameDriver.link addToRunLoop:NSRunLoop.mainRunLoop forMode:NSRunLoopCommonModes];
+    fprintf(stderr,"UNLEASHED stable frame driver installed\n");
+    return 0;
+}
 static SDL_Window *orientationWindow;
 void QVR_IOSRequestLandscape(SDL_Window *window) {
  orientationWindow=window;

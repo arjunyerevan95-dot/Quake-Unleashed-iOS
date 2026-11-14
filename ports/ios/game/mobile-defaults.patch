@@ -1,0 +1,25 @@
+--- a/Quake/vr/vr_main.cpp
++++ b/Quake/vr/vr_main.cpp
+@@ -375,6 +375,12 @@
+ void startGameCommands()
+ {
+ #ifdef QVR_IOS
++    // Mobile flat UI defaults are migrated once, after saved configuration.
++    if(Cvar_VariableValue("vr_ios_flat_ui_version") == 0.f){
++        const char *names[]={"vr_flashlight","vr_menu_flat_vr_style","vr_menu_recolor"};
++        for(const char *name:names) if(Cvar_VariableValue(name)==1.f) Cvar_Set(name,"0");
++        Cvar_Set("vr_ios_flat_ui_version","1");
++    }
+     // One-time mobile behavior preset: preserve explicit custom nondefault values.
+     // Set vr_ios_vanilla_version to -1 before launch to opt out.
+     if(Cvar_VariableValue("vr_ios_vanilla_version") == 0.f){
+--- a/Quake/vr/vr_cvars.inc
++++ b/Quake/vr/vr_cvars.inc
+@@ -4267,3 +4267,7 @@
+ #ifdef QVR_IOS
+ QVR_CVAR(vr_ios_vanilla_version, "0", CVAR_ARCHIVE)
+ #endif
++
++#ifdef QVR_IOS
++QVR_CVAR(vr_ios_flat_ui_version, "0", CVAR_ARCHIVE)
++#endif

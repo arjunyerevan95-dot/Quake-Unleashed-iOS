@@ -232,7 +232,7 @@ index 83bbe65..6d28ae5 100644
 +        float dt=q_min(host_rawframetime,0.05);
 +        float yaw=phone[0]*orientation, pitch=phone[1]*orientation;
 +        scale=(180.f/M_PI)*dt*IN_FovScale();
-+        float right=-scale*yaw*gyro_yawsensitivity.value;
++        float right=scale*yaw*gyro_yawsensitivity.value;
 +        float down=-scale*pitch*gyro_pitchsensitivity.value;
 +        VR_FlatLookTurn(&right,&down);
 +        cl.viewangles[YAW]-=right;cl.viewangles[PITCH]+=down;
