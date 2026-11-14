@@ -1,0 +1,51 @@
+--- a/Quake/vr/vr_main.cpp
++++ b/Quake/vr/vr_main.cpp
+@@ -375,6 +375,38 @@
+ void startGameCommands()
+ {
+ #ifdef QVR_IOS
++    // One-time mobile behavior preset: preserve explicit custom nondefault values.
++    // Set vr_ios_vanilla_version to -1 before launch to opt out.
++    if(Cvar_VariableValue("vr_ios_vanilla_version") == 0.f){
++        struct Rule { const char *name; float previous; const char *value; };
++        const Rule rules[]={
++            {"vr_kdtrig_flung",1.0f,"0"},
++            {"vr_ai_enhanced",1.0f,"0"},
++            {"vr_agrunt_repl",1.0f,"0"},
++            {"vr_agknight",1.0f,"0"},
++            {"vr_agdknight",1.0f,"0"},
++            {"vr_enemy_aim_cone",1.0f,"0"},
++            {"vr_enemy_shove",1.0f,"0"},
++            {"vr_enemy_melee_space",16.0f,"0"},
++            {"vr_closequarters",1.0f,"0"},
++            {"vr_hit_react_slow",1.0f,"0"},
++            {"vr_hit_push",1.0f,"0"},
++            {"vr_melee_push_player",0.6f,"0"},
++            {"vr_hit_stagger",1.0f,"0"},
++            {"vr_kdtrig",1.0f,"0"},
++            {"vr_knockdown",1.0f,"0"},
++            {"vr_parry",1.0f,"0"},
++            {"vr_kill_push",1.0f,"1.5"},
++            {"vr_nav",1.0f,"0"},
++            {"vr_grunt_burst",1.0f,"0"},
++            {"vr_enforcer_laser_speed",690.0f,"600"},
++            {"vr_ogre_aim_height",1.0f,"0"},
++            {"vr_enemy_melee_arc",1.0f,"0"},
++        };
++        for(const Rule &rule:rules)
++            if(Cvar_VariableValue(rule.name)==rule.previous) Cvar_Set(rule.name,rule.value);
++        Cvar_Set("vr_ios_vanilla_version","1");
++    }
+     // One-time phone migration after saved config execution. Preserve non-default custom scales.
+     if(Cvar_VariableValue("scr_ios_ui_version") < 1.f){
+         const char* scales[]={"scr_menuscale","scr_sbarscale","scr_conscale"};
+--- a/Quake/vr/vr_cvars.inc
++++ b/Quake/vr/vr_cvars.inc
+@@ -4263,3 +4263,7 @@
+ QVR_CVAR(vr_lootbeam_keys, "0", CVAR_ARCHIVE)           // keys and runes
+ QVR_CVAR(vr_lootbeam_backpacks, "0", CVAR_ARCHIVE)      // backpacks
+ QVR_CVAR(vr_lootbeam_debug, "0", CVAR_NONE)             // a console line a second: the beams drawn by category, and the things skipped (held, moving, an empty magazine)
++
++#ifdef QVR_IOS
++QVR_CVAR(vr_ios_vanilla_version, "0", CVAR_ARCHIVE)
++#endif
