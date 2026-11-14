@@ -173,13 +173,21 @@ int QVR_TouchEvent(const SDL_Event *e,int menu) {
 static void circle(SDL_Renderer*r,float x,float y,float radius) {
  SDL_FPoint p[49];for(int i=0;i<=48;i++){float a=(float)i*6.2831853f/48;p[i].x=x+cosf(a)*radius;p[i].y=y+sinf(a)*radius;}SDL_RenderDrawLinesF(r,p,49);
 }
-static void line(SDL_Renderer*r,float x,float y,float a,float b,float c,float d,float s){SDL_RenderDrawLineF(r,x+a*s,y+b*s,x+c*s,y+d*s);}
-/* Solid geometric glyphs, not a ring of indistinguishable hairline buttons. */
-static void bar(SDL_Renderer*r,float x,float y,float a,float b,float w,float h,float s){SDL_FRect q={x+a*s,y+b*s,w*s,h*s};SDL_RenderFillRectF(r,&q);}
+/* Independently authored solid vector geometry from the requested ivory/charcoal
+ * action-glyph description. No external icon pack or Library bytes are used. */
+static void poly(SDL_Renderer*r,float x,float y,float s,const float*p,int n){
+ SDL_Vertex v[24];int ix[66];Uint8 red,green,blue,alpha;
+ if(n<3||n>24)return;SDL_GetRenderDrawColor(r,&red,&green,&blue,&alpha);
+ for(int i=0;i<n;i++){v[i].position=(SDL_FPoint){x+p[i*2]*s,y+p[i*2+1]*s};v[i].color=(SDL_Color){red,green,blue,alpha};v[i].tex_coord=(SDL_FPoint){0,0};}
+ for(int i=0;i<n-2;i++){ix[i*3]=0;ix[i*3+1]=i+1;ix[i*3+2]=i+2;}
+ SDL_RenderGeometry(r,NULL,v,n,ix,(n-2)*3);
+}
+static void bar(SDL_Renderer*r,float x,float y,float a,float b,float w,float h,float s){float p[]={a,b,a+w,b,a+w,b+h,a,b+h};poly(r,x,y,s,p,4);}
 static void stroke(SDL_Renderer*r,float x,float y,float a,float b,float c,float d,float s){
  float dx=c-a,dy=d-b,n=sqrtf(dx*dx+dy*dy);if(n==0)return;
- for(float k=-.09f;k<=.09f;k+=.03f)line(r,x,y,a-dy/n*k,b+dx/n*k,c-dy/n*k,d+dx/n*k,s);
+ float u=-dy/n*.105f,v=dx/n*.105f,p[]={a+u,b+v,c+u,d+v,c-u,d-v,a-u,b-v};poly(r,x,y,s,p,4);
 }
+static void disc(SDL_Renderer*r,float x,float y,float radius){float p[40];for(int i=0;i<20;i++){float a=i*6.2831853f/20;p[2*i]=cosf(a);p[2*i+1]=sinf(a);}poly(r,x,y,radius,p,20);}
 static void glyph(SDL_Renderer*r,int role,float x,float y,float s){
  if(role==FIRE){ /* slide, barrel, grip and trigger guard of a sidearm */
   bar(r,x,y,-1.05f,-.65f,1.9f,.42f,s);bar(r,x,y,.7f,-.53f,.4f,.2f,s);
@@ -193,10 +201,12 @@ static void glyph(SDL_Renderer*r,int role,float x,float y,float s){
   /* Three cartridges plus a clear cycling chevron. */
   for(int i=0;i<3;i++){float a=-.8f+i*.4f;bar(r,x,y,a,-.55f,.23f,.7f,s);stroke(r,x,y,a,-.55f,a+.115f,-.75f,s);stroke(r,x,y,a+.115f,-.75f,a+.23f,-.55f,s);}
   float v=role==NEXT?1:-1;stroke(r,x,y,-.7f*v,.55f,.7f*v,.55f,s);stroke(r,x,y,.7f*v,.55f,.35f*v,.25f,s);stroke(r,x,y,.7f*v,.55f,.35f*v,.85f,s);
- }else if(role==CROUCH){circle(r,x+s*.22f,y-s*.65f,s*.18f);stroke(r,x,y,.1f,-.4f,-.35f,.1f,s);stroke(r,x,y,-.35f,.1f,.35f,.2f,s);stroke(r,x,y,.35f,.2f,-.15f,.8f,s);stroke(r,x,y,-.15f,.8f,.7f,.8f,s);stroke(r,x,y,-.08f,-.13f,.7f,-.03f,s);
- }else if(role==GYRO){circle(r,x,y,s*.7f);stroke(r,x,y,-1,0,1,0,s);stroke(r,x,y,0,-1,0,1,s);circle(r,x,y,s*.22f);
+ }else if(role==CROUCH){disc(r,x+s*.22f,y-s*.65f,s*.19f);stroke(r,x,y,.1f,-.4f,-.35f,.1f,s);stroke(r,x,y,-.35f,.1f,.35f,.2f,s);stroke(r,x,y,.35f,.2f,-.15f,.8f,s);stroke(r,x,y,-.15f,.8f,.7f,.8f,s);stroke(r,x,y,-.08f,-.13f,.7f,-.03f,s);
+ }else if(role==GYRO){ /* phone silhouette and explicit tilt arrows */
+  stroke(r,x,y,-.38f,-.7f,.38f,-.7f,s);stroke(r,x,y,.38f,-.7f,.38f,.7f,s);stroke(r,x,y,.38f,.7f,-.38f,.7f,s);stroke(r,x,y,-.38f,.7f,-.38f,-.7f,s);
+  bar(r,x,y,-.12f,.42f,.24f,.1f,s);stroke(r,x,y,-.9f,-.35f,-.65f,-.6f,s);stroke(r,x,y,-.9f,-.35f,-.65f,-.1f,s);stroke(r,x,y,.9f,.35f,.65f,.6f,s);stroke(r,x,y,.9f,.35f,.65f,.1f,s);
  }else if(role==BACK){stroke(r,x,y,.8f,0,-.8f,0,s);stroke(r,x,y,-.8f,0,-.15f,-.65f,s);stroke(r,x,y,-.8f,0,-.15f,.65f,s);
- }else if(role==MENU){for(int k=-1;k<=1;k++)bar(r,x,y,-.8f,k*.55f-.09f,1.6f,.18f,s);}
+ }else if(role==MENU){bar(r,x,y,-.55f,-.72f,.35f,1.44f,s);bar(r,x,y,.2f,-.72f,.35f,1.44f,s);}
 }
 static void editorIcon(SDL_Renderer*r,int action,float x,float y,float s){
  if(action==0){stroke(r,x,y,-.6f,-.6f,.6f,.6f,s);stroke(r,x,y,-.6f,.6f,.6f,-.6f,s);}
@@ -211,12 +221,13 @@ void QVR_TouchDraw(SDL_Renderer*r,int w,int h) {
   float x=buttons[i].x*w,y=buttons[i].y*h,s=h*(role==FIRE?.049f:.033f)*buttons[i].scale;int held=0;
   for(int j=0;j<NF;j++)if(fingers[j].used&&fingers[j].role==role)held=1;
   if(role==GYRO)held=gyroEnabled;
-  SDL_SetRenderDrawColor(r,8,12,16,180);glyph(r,role,x+h*.003f,y+h*.004f,s*1.06f);
-  SDL_SetRenderDrawColor(r,held?255:238,held?198:243,held?100:248,role==GYRO&&gyroIndex<0?65:held?255:215);glyph(r,role,x,y,s);
+  /* Quiet charcoal backing and ivory action; amber is reserved for active gyro. */
+  SDL_SetRenderDrawColor(r,20,22,24,held?210:155);disc(r,x,y,s*1.32f);
+  Uint8 alpha=role==GYRO&&gyroIndex<0?70:held?255:230;
+  if(role==GYRO&&held)SDL_SetRenderDrawColor(r,245,181,67,alpha);
+  else SDL_SetRenderDrawColor(r,246,241,222,alpha);
+  glyph(r,role,x,y,s);
  }
- /* Inventory silhouette is decorative; previous/next remain distinct buttons. */
- float px=.84f,py=.49f,nx=.95f,ny=.49f;for(int i=0;i<NB;i++){if(buttons[i].role==PREV){px=buttons[i].x;py=buttons[i].y;}if(buttons[i].role==NEXT){nx=buttons[i].x;ny=buttons[i].y;}}
- SDL_SetRenderDrawColor(r,225,230,235,135);glyph(r,FIRE,(px+nx)*.5f*w,(py+ny)*.5f*h,h*.028f);
  float ox=.15f*w,oy=.76f*h,radius=.15f;
  for(int b=0;b<NB;b++)if(buttons[b].role==MOVE){ox=buttons[b].x*w;oy=buttons[b].y*h;radius=itemRadius(b);}
  float tx=ox,ty=oy;int moving=0;
